@@ -9,10 +9,15 @@ import LumosCore
 /// collapses to "waiting for Claude Code…"; Stale keeps its frozen numbers.
 /// Absolute reset time is shown in **IST** for now (DECISIONS.md).
 enum ReadoutFormatting {
-    static let indiaTimeZone = TimeZone(identifier: "Asia/Kolkata")
+    /// The one IST zone the UI formats reset times in — shared with the
+    /// notification engine's day/hour boundaries (`LumosCore`).
+    static let indiaTimeZone: TimeZone? = NotificationEngine.defaultTimeZone
 
     /// The 5-hour window length, used to derive the next reset once Refilled.
-    private static let fiveHourWindow: Int64 = 5 * 60 * 60
+    private static let fiveHourWindow = CacheAggregator.fiveHourWindowSeconds
+
+    /// `"65%"` — the one place a used-percentage becomes display text.
+    static func percent(_ value: Double) -> String { "\(Int(value.rounded()))%" }
 
     struct Fields {
         let primary: String    // "65%" / "65% used" / "waiting for Claude Code…"
@@ -51,7 +56,7 @@ enum ReadoutFormatting {
             return Fields(primary: waitingPrimary, reset: nil, weekly: nil, isIdle: true)
         }
         let resolved = resolved(for: aggregate, freshness: freshness)
-        let primary = resolved.usedPercentage.map { "\(Int($0.rounded()))%" } ?? "usage unknown"
+        let primary = resolved.usedPercentage.map { percent($0) } ?? "usage unknown"
         let reset = resolved.resetEpoch.map { "\(relativeReset(epoch: $0, now: now)) to reset" }
         return Fields(primary: primary, reset: reset, weekly: nil, isIdle: false)
     }
@@ -62,10 +67,10 @@ enum ReadoutFormatting {
             return Fields(primary: waitingPrimary, reset: nil, weekly: nil, isIdle: true)
         }
         let resolved = resolved(for: aggregate, freshness: freshness)
-        let primary = resolved.usedPercentage.map { "\(Int($0.rounded()))% used" } ?? "usage unknown"
+        let primary = resolved.usedPercentage.map { "\(percent($0)) used" } ?? "usage unknown"
         let reset = resolved.resetEpoch.map { "resets \(absoluteTime(epoch: $0))" }
         let weekly = aggregate.latestSnapshot?.sevenDay?.usedPercentage
-            .map { "wk \(Int($0.rounded()))%" }
+            .map { "wk \(percent($0))" }
         return Fields(primary: primary, reset: reset, weekly: weekly, isIdle: false)
     }
 
@@ -93,7 +98,9 @@ enum ReadoutFormatting {
         return "\(Int(seconds / 60))m ago"
     }
 
-    private static func absoluteTime(epoch: Int64) -> String {
+    /// `"6:05 PM IST"` — an absolute reset instant in IST. The one IST clock
+    /// formatter; the menu header's reset suffix routes through here too.
+    static func absoluteTime(epoch: Int64) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
         formatter.timeZone = indiaTimeZone

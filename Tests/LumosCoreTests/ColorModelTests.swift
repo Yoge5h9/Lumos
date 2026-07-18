@@ -113,6 +113,7 @@ import Foundation
                 updatedAt: Int64(now.timeIntervalSince1970)
             ),
             maxContextUsedPercentage: nil,
+            contextSessionId: nil,
             isStale: true
         )
         #expect(ColorModel.state(aggregate: aggregate, now: now) == .idle)
@@ -129,6 +130,7 @@ import Foundation
                 updatedAt: Int64(now.timeIntervalSince1970)
             ),
             maxContextUsedPercentage: nil,
+            contextSessionId: nil,
             isStale: false
         )
         #expect(ColorModel.state(aggregate: aggregate, now: now) == .watch)

@@ -33,6 +33,9 @@ final class NotchWindowController {
     private var currentAggregate: CacheAggregate?
     private var currentFreshness: Freshness = .waiting
     private var currentState: UsageState = .idle
+    /// Mirrors the app's master toggle so the hover re-derive resolves the same
+    /// effective freshness the paint pipeline did (see `refreshReadout`).
+    private var currentMasterOff = false
     private var lastState: UsageState?
     private var lastFreshness: Freshness?
     private var isVisibleSurface = false
@@ -100,8 +103,8 @@ final class NotchWindowController {
         content.addSubview(readoutView)
         PillChrome.collapse(readoutView)
 
-        staleSubLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .regular)
-        staleSubLabel.textColor = NSColor.white.withAlphaComponent(0.38)
+        staleSubLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
+        staleSubLabel.textColor = NSColor.white.withAlphaComponent(0.5)
         staleSubLabel.alignment = .center
         staleSubLabel.isBezeled = false
         staleSubLabel.drawsBackground = false
@@ -119,9 +122,10 @@ final class NotchWindowController {
     /// adaptive-glow's resting floor; `freshness` decides whether that hue reads
     /// full and live or desaturated-dimmed-and-frozen; `aggregate` feeds the
     /// Readout text.
-    func update(state: UsageState, freshness: Freshness, aggregate: CacheAggregate) {
+    func update(state: UsageState, freshness: Freshness, aggregate: CacheAggregate, masterOff: Bool) {
         currentAggregate = aggregate
         currentState = state
+        currentMasterOff = masterOff
         applyFreshness(freshness)
         if readoutVisible { refreshReadout() }
     }
@@ -133,8 +137,7 @@ final class NotchWindowController {
     private func applyFreshness(_ freshness: Freshness) {
         currentFreshness = freshness
         let isStale = freshness == .stale
-        let base = NSColor(hex: currentState.hex) ?? .systemGray
-        currentAccent = isStale ? base.staled() : base
+        currentAccent = currentState.accent(stale: isStale)
 
         if currentState != lastState || freshness != lastFreshness {
             let duration: CFTimeInterval = isStale ? StaleStyle.fadeDuration : 0.4
@@ -148,6 +151,7 @@ final class NotchWindowController {
             lastState = currentState
             lastFreshness = freshness
         }
+        refreshStaleLine()
     }
 
     /// Show/hide + pick the surface treatment for the current display. Non-notch +
@@ -158,12 +162,14 @@ final class NotchWindowController {
         isVisibleSurface = shouldShow
 
         guard shouldShow else {
+            staleSubLabel.isHidden = true
             panel.orderOut(nil)
             return
         }
 
         layoutForGeometry(thinBarEnabled: thinBarEnabled)
         panel.orderFrontRegardless()
+        refreshStaleLine()
     }
 
     private func layoutForGeometry(thinBarEnabled: Bool) {
@@ -219,8 +225,15 @@ final class NotchWindowController {
         guard isVisibleSurface else { return }
         let inRegion = hoverRegionScreenRect.contains(NSEvent.mouseLocation)
         if inRegion {
+            // Re-derive freshness on every in-region move, not only the first: a
+            // window that ages past the staleness threshold mid-hover must
+            // desaturate and freeze at look-time, not wait for the next paint.
+            // Ordered before wake() so a stale re-derivation freezes the glow and
+            // the following wake is inert, leaving a stale hover dimmed.
+            if pills.isEmpty {
+                if readoutVisible { refreshReadout() } else { showReadout() }
+            }
             glow.wake()
-            if !readoutVisible && pills.isEmpty { showReadout() }
         } else if readoutVisible {
             hideReadout()
         }
@@ -234,8 +247,8 @@ final class NotchWindowController {
 
     private func hideReadout() {
         readoutVisible = false
-        staleSubLabel.isHidden = true
         PillChrome.bleed(readoutView, visible: false)
+        refreshStaleLine()
     }
 
     private func refreshReadout() {
@@ -243,8 +256,12 @@ final class NotchWindowController {
         // threshold with no new data. Re-derive it at look-time so the hover view
         // (Halo hue, pill, age line) is never staler than the menu — which
         // recomputes freshness live on open — between the coarse ticks that paint.
+        // Resolve the SAME effective freshness the paint pipeline uses so the
+        // notch, LED dot and menu never disagree, and the Halo never flips on a
+        // hover that only re-derives raw age.
         if let aggregate = currentAggregate {
-            let fresh = aggregate.freshness(now: Date())
+            let raw = aggregate.freshness(now: Date())
+            let fresh = Freshness.effective(raw: raw, state: currentState, masterOff: currentMasterOff)
             if fresh != currentFreshness { applyFreshness(fresh) }
         }
         let fields = currentAggregate.map {
@@ -254,15 +271,18 @@ final class NotchWindowController {
         )
         let size = readoutView.update(fields: fields, accent: currentAccent)
         positionBelowNotch(readoutView, size: size, indexFromTop: 0)
-        updateStaleSubLabel(below: readoutView)
+        refreshStaleLine()
     }
 
-    /// Place (or hide) the ambient stale age line centered just under the pill.
-    private func updateStaleSubLabel(below pill: NSView) {
+    /// The ambient "stale · updated Xm ago" line, shown just below the Readout
+    /// pill while hovering a stale window — immediately on hover, and refreshed on
+    /// the coarse tick so its "Xm ago" keeps current. Hidden at rest and for any
+    /// non-stale state (no permanent marker floating below the notch).
+    private func refreshStaleLine() {
         let text = currentAggregate.flatMap {
             ReadoutFormatting.staleSubLabel(for: $0, freshness: currentFreshness)
         }
-        guard readoutVisible, let text else {
+        guard readoutVisible, isVisibleSurface, let text else {
             staleSubLabel.isHidden = true
             return
         }
@@ -270,7 +290,7 @@ final class NotchWindowController {
         staleSubLabel.sizeToFit()
         let gap: CGFloat = 5
         let originX = (contentView.bounds.width - staleSubLabel.frame.width) / 2
-        let originY = pill.frame.minY - gap - staleSubLabel.frame.height
+        let originY = readoutView.frame.minY - gap - staleSubLabel.frame.height
         staleSubLabel.setFrameOrigin(NSPoint(x: originX, y: originY))
         staleSubLabel.isHidden = false
     }

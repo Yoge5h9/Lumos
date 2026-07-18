@@ -29,7 +29,11 @@ public enum AtomicFile {
             throw AtomicFileError.directoryCreationFailed(directory, underlying: error)
         }
 
-        let tempURL = destination.appendingPathExtension("tmp")
+        // A per-writer temp name (pid + uuid) so two processes ingesting the same
+        // cache concurrently never share one temp file and corrupt each other's
+        // partial write before the atomic rename.
+        let tempName = "\(destination.lastPathComponent).\(ProcessInfo.processInfo.processIdentifier).\(UUID().uuidString).tmp"
+        let tempURL = directory.appendingPathComponent(tempName, isDirectory: false)
         do {
             try data.write(to: tempURL, options: .atomic)
         } catch {

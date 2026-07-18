@@ -5,6 +5,20 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — Hover reflects stale at look-time; one freshness policy
+
+- **The notch re-derives freshness on every in-region hover move**, not only on first entry — so a
+  window that crosses the staleness threshold *while being hovered* desaturates, freezes, and shows the
+  `stale · updated Xm ago` line immediately, rather than lagging until the next 60s paint. The re-derive
+  is ordered before `glow.wake()`, which no-ops while the glow is frozen, so a stale hover stays dimmed.
+- **`Freshness.effective(raw:state:masterOff:)` is the single policy** the notch Halo, menu-bar LED,
+  menu header and LED HUD all resolve through — they can never disagree for the same data. Master-off →
+  `waiting`; a stale snapshot on an Idle state (no numbers to freeze) → `waiting`, not an empty frozen
+  Stale treatment.
+- **Refilled is bounded.** Once the reset instant is behind us the window is treated as topped-up
+  (`refilled`), but only while it's still plausibly current: a snapshot so old that even the next window
+  boundary (reset + one window) has passed collapses to `waiting`, never a bright frozen "0% · 0m".
+
 ## 2026-07-18 — v0.1.0 published to Homebrew
 
 - **Icon: "Wand Tip + Bloom" (woody)** — a tapered walnut→mahogany wand casting an amber bloom.

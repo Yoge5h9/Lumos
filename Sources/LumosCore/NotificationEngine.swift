@@ -148,24 +148,11 @@ public struct UsageSignal: Equatable {
         now: Date,
         stalenessThreshold: TimeInterval = CacheAggregator.defaultStalenessThreshold
     ) -> UsageSignal {
-        let nowEpoch = now.timeIntervalSince1970
-        func isFresh(_ updatedAt: Int64) -> Bool { nowEpoch - Double(updatedAt) <= stalenessThreshold }
-
-        let latest = cache.max { $0.value.updatedAt < $1.value.updatedAt }
-        let isStale = !(latest.map { isFresh($0.value.updatedAt) } ?? false)
-
-        let maxContext = cache
-            .filter { isFresh($0.value.updatedAt) }
-            .compactMap { sid, entry -> (String, Double)? in
-                guard let pct = entry.contextWindow?.usedPercentage else { return nil }
-                return (sid, pct)
-            }
-            .max { $0.1 < $1.1 }
-
+        let aggregate = CacheAggregator.aggregate(cache: cache, now: now, stalenessThreshold: stalenessThreshold)
         return UsageSignal(
-            maxContextPercentage: maxContext?.1,
-            contextSessionId: maxContext?.0,
-            isStale: isStale
+            maxContextPercentage: aggregate.maxContextUsedPercentage,
+            contextSessionId: aggregate.contextSessionId,
+            isStale: aggregate.isStale
         )
     }
 }

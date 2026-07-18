@@ -174,18 +174,10 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     }
 
     private func paint(state: UsageState, freshness: Freshness, aggregate: CacheAggregate, now: Date) {
-        // Nothing to "rest on" reads as no-signal, not Stale: master-off, or a
-        // stale snapshot with no 5-hour numbers to freeze (e.g. a free plan).
-        let effectiveFreshness: Freshness
-        if settings.masterOff {
-            effectiveFreshness = .waiting
-        } else if freshness == .stale, state == .idle {
-            effectiveFreshness = .waiting
-        } else {
-            effectiveFreshness = freshness
-        }
+        let effectiveFreshness = Freshness.effective(raw: freshness, state: state, masterOff: settings.masterOff)
         renderLED(state: state, freshness: effectiveFreshness, aggregate: aggregate, now: now)
-        notchController.update(state: state, freshness: effectiveFreshness, aggregate: aggregate)
+        notchController.update(state: state, freshness: effectiveFreshness, aggregate: aggregate,
+                               masterOff: settings.masterOff)
     }
 
     /// The LED image + optional "% text" the status item shows. Skipped entirely
@@ -205,7 +197,7 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         let title: String
         let resolved = ReadoutFormatting.resolved(for: aggregate, freshness: freshness)
         if settings.showPercentEnabled, let used = resolved.usedPercentage {
-            title = " \(Int(used.rounded()))%"
+            title = " " + ReadoutFormatting.percent(used)
         } else {
             title = ""
         }
@@ -214,9 +206,8 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         guard signature != lastRender else { return }
         lastRender = signature
 
-        let ledColor = isStale ? state.color.staled() : state.color
         statusItem.button?.image = StatusItemLED.image(
-            color: ledColor,
+            color: state.accent(stale: isStale),
             monochrome: !showColor,
             opacity: isStale ? StaleStyle.glowLevel : 1
         )
@@ -537,19 +528,22 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     private func refreshHeaderAndUpdateRow(in menu: NSMenu) {
         let now = Date()
         let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile(), now: now)
-        let freshness = aggregate.freshness(now: now)
+        let raw = aggregate.freshness(now: now)
+        let state = currentState(aggregate: aggregate, freshness: raw,
+                                 burn: burnSampler.burnRatePerSecond(), now: now)
+        let freshness = Freshness.effective(raw: raw, state: state, masterOff: settings.masterOff)
 
         if freshness == .waiting {
             statusHeaderItem.title = "Waiting for Claude Code…"
             weeklyItem.isHidden = true
         } else {
             let resolved = ReadoutFormatting.resolved(for: aggregate, freshness: freshness)
-            let usedText = resolved.usedPercentage.map { "\(Int($0.rounded()))% used" } ?? "usage unknown"
+            let usedText = resolved.usedPercentage.map { "\(ReadoutFormatting.percent($0)) used" } ?? "usage unknown"
             let staleSuffix = freshness == .stale ? " (stale)" : ""
             statusHeaderItem.title = usedText + resetSuffix(resolved.resetEpoch) + staleSuffix
 
             if let weekly = aggregate.latestSnapshot?.sevenDay?.usedPercentage {
-                weeklyItem.title = "Weekly: \(Int(weekly.rounded()))%"
+                weeklyItem.title = "Weekly: \(ReadoutFormatting.percent(weekly))"
                 weeklyItem.isHidden = false
             } else {
                 weeklyItem.isHidden = true
@@ -595,11 +589,7 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
 
     private func resetSuffix(_ resetsAt: Int64?) -> String {
         guard let resetsAt else { return "" }
-        let date = Date(timeIntervalSince1970: TimeInterval(resetsAt))
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        formatter.timeZone = ReadoutFormatting.indiaTimeZone
-        return " · resets \(formatter.string(from: date)) IST"
+        return " · resets \(ReadoutFormatting.absoluteTime(epoch: resetsAt))"
     }
 
     // MARK: - LED hover → HUD (hover = glance, click = control)
@@ -621,12 +611,12 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         if anchor.contains(NSEvent.mouseLocation) {
             let now = Date()
             let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile(), now: now)
-            let freshness = aggregate.freshness(now: now)
+            let raw = aggregate.freshness(now: now)
             let burn = burnSampler.burnRatePerSecond()
-            let state = currentState(aggregate: aggregate, freshness: freshness, burn: burn, now: now)
+            let state = currentState(aggregate: aggregate, freshness: raw, burn: burn, now: now)
+            let freshness = Freshness.effective(raw: raw, state: state, masterOff: settings.masterOff)
             let fields = ReadoutFormatting.full(for: aggregate, freshness: freshness, now: now)
-            let accent = freshness == .stale ? state.color.staled() : state.color
-            hud.show(below: anchor, fields: fields, accent: accent)
+            hud.show(below: anchor, fields: fields, accent: state.accent(stale: freshness == .stale))
         } else if hud.isVisible {
             hud.hide()
         }

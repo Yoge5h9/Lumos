@@ -21,6 +21,10 @@ public struct CacheAggregate: Equatable {
     /// a session Claude Code hasn't ticked in minutes is not "current usage".
     public let maxContextUsedPercentage: Double?
 
+    /// The session that owns ``maxContextUsedPercentage`` — the one actually
+    /// filling up — so context de-dupe can key on it, not merely the latest.
+    public let contextSessionId: String?
+
     /// True when there is no session fresh enough to trust (including "no
     /// sessions at all"). The app should show the Idle "waiting for Claude
     /// Code…" state whenever this is true.
@@ -42,10 +46,31 @@ public enum Freshness: Equatable {
     case waiting
 }
 
+public extension Freshness {
+    /// The freshness the UI should actually render, given the raw age-derived
+    /// tier, the state that tier resolves to, and whether Lumos is switched off.
+    /// This is the single policy the notch Halo, menu-bar LED, menu header and
+    /// LED HUD all share, so they never disagree for the same data:
+    ///
+    /// - Master-off has nothing to show → `waiting`.
+    /// - A stale snapshot whose state is Idle has no numbers to freeze onto (e.g.
+    ///   a free-plan session with no 5-hour window) → `waiting`, not a frozen
+    ///   Stale treatment resting on nothing.
+    /// - Everything else renders as its raw tier.
+    static func effective(raw: Freshness, state: UsageState, masterOff: Bool) -> Freshness {
+        if masterOff { return .waiting }
+        if raw == .stale, state == .idle { return .waiting }
+        return raw
+    }
+}
+
 public extension CacheAggregate {
     /// The freshness tier for the latest snapshot. `refilled` takes precedence
-    /// over age: once the reset instant is behind us we know it's fresh again,
-    /// however long since the last tick.
+    /// over age — once the reset instant is behind us the window has topped up —
+    /// but only while that refilled window is still plausibly current: a snapshot
+    /// so old that even the next window boundary (reset + one window) is already
+    /// past can't yield a meaningful "0% · Nm to reset", so it collapses to the
+    /// no-data prompt instead of a bright, frozen refill.
     func freshness(
         now: Date = Date(),
         stalenessThreshold: TimeInterval = CacheAggregator.defaultStalenessThreshold
@@ -53,9 +78,11 @@ public extension CacheAggregate {
         guard let snapshot = latestSnapshot else { return .waiting }
         let nowEpoch = now.timeIntervalSince1970
         if let resetsAt = snapshot.fiveHour?.resetsAt, nowEpoch >= Double(resetsAt) {
-            return .refilled
+            let nextBoundary = Double(resetsAt + CacheAggregator.fiveHourWindowSeconds)
+            return nowEpoch < nextBoundary ? .refilled : .waiting
         }
-        return nowEpoch - Double(snapshot.updatedAt) <= stalenessThreshold ? .live : .stale
+        let age = nowEpoch - Double(snapshot.updatedAt)
+        return age <= stalenessThreshold ? .live : .stale
     }
 }
 
@@ -66,6 +93,10 @@ public enum CacheAggregator {
     /// isn't wrong data (used-% only rises on sends, reset is absolute), so the
     /// bar is generous: keep showing the last-known numbers, just visibly aged.
     public static let defaultStalenessThreshold: TimeInterval = 300
+
+    /// The 5-hour usage window length, in seconds. The single source for both the
+    /// "ancient refill" cutoff here and the next-reset derivation the readout uses.
+    public static let fiveHourWindowSeconds: Int64 = 5 * 60 * 60
 
     public static func aggregate(
         cache: LumosCache,
@@ -92,14 +123,18 @@ public enum CacheAggregator {
 
         let isStale = !(latestEntry.map { isFresh($0.value.updatedAt) } ?? false)
 
-        let maxContextPercentage = cache.values
-            .filter { isFresh($0.updatedAt) }
-            .compactMap { $0.contextWindow?.usedPercentage }
-            .max()
+        let maxContext = cache
+            .filter { isFresh($0.value.updatedAt) }
+            .compactMap { sid, entry -> (String, Double)? in
+                guard let pct = entry.contextWindow?.usedPercentage else { return nil }
+                return (sid, pct)
+            }
+            .max { $0.1 < $1.1 }
 
         return CacheAggregate(
             latestSnapshot: latestSnapshot,
-            maxContextUsedPercentage: maxContextPercentage,
+            maxContextUsedPercentage: maxContext?.1,
+            contextSessionId: maxContext?.0,
             isStale: isStale
         )
     }

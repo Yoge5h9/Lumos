@@ -52,8 +52,7 @@ struct NotchGeometry: Equatable {
     /// widest pill and tall enough for the notch plus a downward "Bleed" drop.
     func overlayWindowFrame(dropHeight: CGFloat) -> CGRect {
         let width = max(notchFrame.width + 160, 400)
-        let notchHeight = hasNotch ? notchFrame.height : 6
-        let height = notchHeight + dropHeight
+        let height = renderNotchHeight + dropHeight
         let centerX = notchFrame.midX
         return CGRect(
             x: centerX - width / 2,

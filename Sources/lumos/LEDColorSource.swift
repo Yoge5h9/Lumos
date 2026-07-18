@@ -6,6 +6,13 @@ import LumosCore
 /// once in `LumosCore.UsageState` (`.hex`); this only turns it into an `NSColor`.
 extension UsageState {
     var color: NSColor { NSColor(hex: hex) ?? .systemGray }
+
+    /// The accent to paint for this state, desaturated toward the warm neutral
+    /// when the reading is stale. The one place the "stale ⇒ staled hue" rule
+    /// lives, shared by the Halo, the LED dot, and the LED HUD.
+    func accent(stale: Bool) -> NSColor {
+        stale ? color.staled() : color
+    }
 }
 
 /// Resolves the LED's usage state from a cache aggregate via the real risk model

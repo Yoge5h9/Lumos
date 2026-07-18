@@ -124,4 +124,63 @@ import Foundation
         let aggregate = CacheAggregator.aggregate(cache: cache)
         #expect(aggregate.isStale)
     }
+
+    // MARK: - Freshness tiers
+
+    @Test func staleProSessionIsStaleNotLiveNorRefilled() {
+        // Mirrors a real multi-session cache: the latest snapshot is a Pro/Max
+        // session last ticked ~52m ago with reset still hours out. It must read
+        // .stale (frozen numbers), never .live and never .refilled.
+        let now = Date(timeIntervalSince1970: 1_784_390_297)
+        var cache: LumosCache = [:]
+        cache["older"] = SessionCacheEntry(
+            fiveHour: RateLimitWindow(usedPercentage: 65, resetsAt: 1_784_386_800),
+            updatedAt: 1_784_381_223
+        )
+        cache["latest"] = SessionCacheEntry(
+            fiveHour: RateLimitWindow(usedPercentage: 2, resetsAt: 1_784_404_800),
+            updatedAt: 1_784_387_163
+        )
+        let aggregate = CacheAggregator.aggregate(cache: cache, now: now)
+        #expect(aggregate.latestSnapshot?.sessionId == "latest")
+        #expect(aggregate.freshness(now: now) == .stale)
+    }
+
+    @Test func recentlyPassedResetIsRefilled() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        var cache: LumosCache = [:]
+        cache["s"] = SessionCacheEntry(
+            fiveHour: RateLimitWindow(usedPercentage: 80, resetsAt: 999_000),
+            updatedAt: 990_000
+        )
+        // Reset just behind now, next window boundary still ahead → refilled.
+        #expect(CacheAggregator.aggregate(cache: cache, now: now).freshness(now: now) == .refilled)
+    }
+
+    @Test func ancientPastResetCollapsesToWaitingNotRefilled() {
+        // Reset is so far behind that even the next window boundary
+        // (reset + one 5h window) is already past — an ancient snapshot must not
+        // masquerade as a bright refill with a nonsense 0m countdown.
+        let resetsAt: Int64 = 1_000_000
+        let now = Date(timeIntervalSince1970:
+            TimeInterval(resetsAt + CacheAggregator.fiveHourWindowSeconds + 60))
+        var cache: LumosCache = [:]
+        cache["ancient"] = SessionCacheEntry(
+            fiveHour: RateLimitWindow(usedPercentage: 80, resetsAt: resetsAt),
+            updatedAt: 990_000
+        )
+        #expect(CacheAggregator.aggregate(cache: cache, now: now).freshness(now: now) == .waiting)
+    }
+
+    @Test func effectiveFreshnessPolicy() {
+        // Master-off silences everything.
+        #expect(Freshness.effective(raw: .live, state: .calm, masterOff: true) == .waiting)
+        // Stale with no numbers to freeze (Idle) → waiting, not a frozen stale.
+        #expect(Freshness.effective(raw: .stale, state: .idle, masterOff: false) == .waiting)
+        // Stale WITH numbers (e.g. Calm) stays stale — the notch/menu/LED agree.
+        #expect(Freshness.effective(raw: .stale, state: .calm, masterOff: false) == .stale)
+        // Everything else passes through untouched.
+        #expect(Freshness.effective(raw: .refilled, state: .calm, masterOff: false) == .refilled)
+        #expect(Freshness.effective(raw: .live, state: .watch, masterOff: false) == .live)
+    }
 }

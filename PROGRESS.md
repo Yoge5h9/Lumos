@@ -4,7 +4,20 @@
 > meaningful chunk of work (see the "Living docs" rule in [`CLAUDE.md`](./CLAUDE.md)).
 > Companion to [`PLAN.md`](./PLAN.md) (the plan) and [`DECISIONS.md`](./DECISIONS.md) (the locks).
 >
-> **Last updated:** 2026-07-18 (stale redesign + onboarding/pill polish landed; Homebrew prep in progress)
+> **Last updated:** 2026-07-18 (hover-stale immediacy fix + review-fix batch landed; cutting v0.1.1)
+
+## 2026-07-18 (latest) — Hover now reflects stale instantly + review-fix batch
+
+- **Fixed: notch lagged the menu on stale.** Hovering a window that aged past the 5-min threshold kept
+  the glow bright and showed no `stale · updated Xm ago` line until the next 60s paint (the "wait
+  40–60s" bug). Root cause: `handleMouseMoved` re-derived freshness only on the *first* region entry;
+  later in-region moves called only `glow.wake()`. Fix: re-derive freshness on **every** in-region
+  move, ordered before `wake()` (which no-ops while frozen), so a mid-hover stale crossing desaturates
+  + freezes + shows the age line **at look-time**. Verified on hardware.
+- **Review-fix batch (Opus-reviewed) landed alongside:** single shared `Freshness.effective` policy so
+  notch/LED/menu never disagree; refilled collapses to `waiting` once even the next window boundary is
+  past (no bright frozen refill from an ancient snapshot); `contextSessionId` so context de-dupe keys on
+  the filling session; `AtomicFile` unique temp names; `UsageState.accent(stale:)` reuse.
 
 ## 2026-07-18 (later) — Stale redesign, compact pill & onboarding landed
 

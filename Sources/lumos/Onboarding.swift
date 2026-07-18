@@ -76,21 +76,23 @@ final class OnboardingController: NSObject, NSWindowDelegate {
             stack.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
 
+        let header = NSStackView()
+        header.orientation = .horizontal
+        header.alignment = .centerY
+        header.spacing = 8
+        let title = label("Lumos", size: 22, weight: .semibold, color: .white)
+        header.addArrangedSubview(title)
         if let mark = OnboardingMark.image() {
-            let markSize: CGFloat = 48
+            let markSize: CGFloat = 34
             let markView = NSImageView(image: mark)
             markView.imageScaling = .scaleProportionallyUpOrDown
             markView.translatesAutoresizingMaskIntoConstraints = false
             markView.widthAnchor.constraint(equalToConstant: markSize).isActive = true
             markView.heightAnchor.constraint(equalToConstant: markSize).isActive = true
-            stack.addArrangedSubview(markView)
-            stack.setCustomSpacing(10, after: markView)
+            header.addArrangedSubview(markView)
         }
-
-        let title = label("Lumos", size: 22, weight: .semibold, color: .white)
-        title.alignment = .center
-        addFullWidth(title, to: stack)
-        stack.setCustomSpacing(8, after: title)
+        stack.addArrangedSubview(header)
+        stack.setCustomSpacing(8, after: header)
 
         let subtitle = label(
             "Lumos lights up the dark — always see, at a glance, how much of your Claude 5-hour window is left.",
@@ -113,8 +115,8 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         }
 
         let note = label(
-            "Updates as you use Claude Code in the terminal.",
-            size: 11, weight: .regular, color: NSColor.white.withAlphaComponent(0.4)
+            "Updates only while you use Claude Code in the terminal.",
+            size: 13, weight: .semibold, color: NSColor.white.withAlphaComponent(0.78)
         )
         note.alignment = .center
         note.maximumNumberOfLines = 0
