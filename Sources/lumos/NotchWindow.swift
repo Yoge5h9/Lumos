@@ -103,8 +103,8 @@ final class NotchWindowController {
         content.addSubview(readoutView)
         PillChrome.collapse(readoutView)
 
-        staleSubLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
-        staleSubLabel.textColor = NSColor.white.withAlphaComponent(0.5)
+        staleSubLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
+        staleSubLabel.textColor = NSColor.white.withAlphaComponent(0.58)
         staleSubLabel.alignment = .center
         staleSubLabel.isBezeled = false
         staleSubLabel.drawsBackground = false
@@ -278,6 +278,21 @@ final class NotchWindowController {
     /// pill while hovering a stale window — immediately on hover, and refreshed on
     /// the coarse tick so its "Xm ago" keeps current. Hidden at rest and for any
     /// non-stale state (no permanent marker floating below the notch).
+    /// The stale caption as attributed text: crisp glyphs lifted off whatever sits
+    /// behind the notch (wallpaper, a bright window edge) by a soft dark halo — no
+    /// stroke, which muddies text this small — so it stays legible and calm.
+    private static func staleAttributed(_ text: String) -> NSAttributedString {
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.75)
+        shadow.shadowBlurRadius = 3
+        shadow.shadowOffset = .zero
+        return NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 10.5, weight: .semibold),
+            .foregroundColor: NSColor.white.withAlphaComponent(0.62),
+            .shadow: shadow
+        ])
+    }
+
     private func refreshStaleLine() {
         let text = currentAggregate.flatMap {
             ReadoutFormatting.staleSubLabel(for: $0, freshness: currentFreshness)
@@ -286,7 +301,7 @@ final class NotchWindowController {
             staleSubLabel.isHidden = true
             return
         }
-        staleSubLabel.stringValue = text
+        staleSubLabel.attributedStringValue = Self.staleAttributed(text)
         staleSubLabel.sizeToFit()
         let gap: CGFloat = 5
         let originX = (contentView.bounds.width - staleSubLabel.frame.width) / 2
