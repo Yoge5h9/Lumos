@@ -4,7 +4,7 @@
 > meaningful chunk of work (see the "Living docs" rule in [`CLAUDE.md`](./CLAUDE.md)).
 > Companion to [`PLAN.md`](./PLAN.md) (the plan) and [`DECISIONS.md`](./DECISIONS.md) (the locks).
 >
-> **Last updated:** 2026-07-18 (hover-stale immediacy fix + review-fix batch landed; cutting v0.1.1)
+> **Last updated:** 2026-07-18 (v0.1.1 shipped to Homebrew — stale-on-hover fix + freshness policy + legibility)
 
 ## 2026-07-18 (latest) — Hover now reflects stale instantly + review-fix batch
 

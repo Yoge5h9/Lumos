@@ -5,6 +5,14 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — v0.1.1 published to Homebrew
+
+- **Released v0.1.1.** Version bumped in `Info.plist` (0.1.1 / build 2), tagged `v0.1.1` + pushed;
+  the tap formula (`Yoge5h9/homebrew-lumos`) repointed at the `v0.1.1` tarball with recomputed
+  `sha256` (`8bbb6a1a…a5ae`). `brew info yoge5h9/lumos/lumos` → `stable 0.1.1`; `brew fetch` verified
+  the tarball + sha. Ships the instant-stale-on-hover fix, the shared freshness policy, and the
+  stale-caption legibility pass. Upgrade path: `brew update && brew upgrade lumos`.
+
 ## 2026-07-18 — Hover reflects stale at look-time; one freshness policy
 
 - **The notch re-derives freshness on every in-region hover move**, not only on first entry — so a
