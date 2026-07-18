@@ -5,6 +5,22 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — v0.1.0 published to Homebrew
+
+- **Icon: "Wand Tip + Bloom" (woody)** — a tapered walnut→mahogany wand casting an amber bloom.
+  Shipped as `Resources/AppIcon.icns` (rasterized via `rsvg-convert` from `Resources/AppIcon.svg`) +
+  the onboarding top mark (base64 PNG embedded in `OnboardingMark.swift`, so it renders in the dev
+  binary *and* the installed `.app`). Chosen over the "Open Halo" runner-up.
+- **Released v0.1.0.** `Yoge5h9/Lumos` is public; tagged + GitHub release; the tap
+  (`Yoge5h9/homebrew-lumos`) formula carries the real url + `sha256` (`87200eee…3c66`) and
+  **`depends_on xcode` was dropped** (CLT-only build validated — users don't need a 15 GB Xcode).
+  `brew info yoge5h9/lumos/lumos` → `stable 0.1.0`; brew fetched the tarball + verified the sha256.
+  Install: `brew install Yoge5h9/lumos/lumos && lumos setup`.
+- **Caveat:** `brew install --build-from-source` was not run to completion locally — Homebrew's
+  CLT-version gate rejects this machine's Command Line Tools as too old. This is an *environment* gate,
+  not a formula defect (direct `swift build -c release` is green; `assemble-app.sh` yields a valid
+  signed `.app`). Complete the end-to-end install test on a machine with current CLT.
+
 ## 2026-07-18 — Data-source lock, stale redesign, capturable notch
 
 - **Data source: pure-local, status-line tee ONLY. Cross-surface sync via the network

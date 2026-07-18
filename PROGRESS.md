@@ -106,12 +106,15 @@ Ported to Swift + build-green (on hardware), superseding the earlier on-hardware
 
 - [x] Land + integrate UI wave, notification engine, updater; `swift build` green
 - [x] Fix the launch crash; verify on hardware
-- [ ] Commit + push this session's work to `Yoge5h9/Lumos` (was 18 files uncommitted)
-- [ ] Fix Idle visibility + add `setup` "start a new session" guidance (on-hardware findings)
-- [ ] Confirm the notch Halo renders in a live color on hardware
-- [ ] Make `Yoge5h9/Lumos` public (secret-scan first; MIT `LICENSE` present)
-- [ ] Fill `Info.plist` bundle id + version `0.1.0`
-- [ ] Tag `v0.1.0`; download tarball → `shasum -a 256` → fill formula `url`+`sha256`; push tap
-- [ ] `brew install --build-from-source Yoge5h9/lumos/lumos` end-to-end (no Gatekeeper prompt);
-      resolve `depends_on xcode` → CLT-only if it builds
+- [x] Commit + push this session's work to `Yoge5h9/Lumos` (`50458c4`)
+- [x] Stale redesign (supersedes Idle-visibility) + high-level "terminal" note in `setup`/onboarding
+- [x] Wand Tip + Bloom app icon (`.icns`) + onboarding mark
+- [x] Confirm live color on hardware (amber at 85% seen)
+- [x] `Yoge5h9/Lumos` **public**; secret scan clean; MIT `LICENSE` present
+- [x] `Info.plist` bundle id `com.yoge5h9.lumos` + version `0.1.0`
+- [x] **Tagged `v0.1.0`** + GitHub release; tarball `sha256` filled + **tap pushed**
+- [x] `depends_on xcode` **dropped** (CLT-only validated) — no 15 GB Xcode for users
+- [x] Formula resolves (`brew info` → `stable 0.1.0`); brew fetched tarball + verified sha256
+- [ ] `brew install --build-from-source` end-to-end — **blocked on THIS machine only** by Homebrew's
+      CLT-version gate ("CLT too outdated"); not a formula defect. Run on a machine with current CLT.
 - [ ] Run the Swift Testing suite under Xcode once (deferred; CLT can't run it)
