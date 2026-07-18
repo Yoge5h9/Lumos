@@ -95,6 +95,11 @@ automation), expected of anyone — human or agent — working in the repo:
 - Setup wires that status line (wrapping any existing one, non-destructively) to tee the
   fields into a small local cache file.
 - The app reads the cache and renders the glow + menu-bar dot. No network calls.
+- Because the status line only fires in the **terminal** Claude Code CLI, Lumos reflects usage as
+  you work in the terminal — usage from the Desktop app / claude.ai / IDE isn't visible (no local
+  hook exists there). When data goes quiet the glow shows a calm **stale** state, never a blank.
+  User-facing copy states this at a high level ("updates as you use Claude Code in the terminal");
+  the low-level mechanics stay out of the UI.
 
 ## Tech
 

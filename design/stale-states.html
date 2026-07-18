@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumos — freshness &amp; staleness states</title>
+<style>
+  :root{
+    --calm:#30d158; --watch:#ffd60a; --alert:#ff453a; --idle:#8c8c8c;
+    --c:var(--watch); --lum:1; --fade:2.2s;
+    /* freshness desaturation: 0 = full colour, 100 = fully neutral. Stale mixes the
+       state hue toward a warm neutral so it reads as "greyed-out mustard", never a
+       different colour and never neutral gray at the default. The mix is written
+       inline at each colour site (not aliased to one var) so a scoped --desat on a
+       child stage resolves per-element — a root-level alias would inherit already
+       resolved and ignore the override. */
+    --desat:0; --mute:#8f877a;
+    --notch-w:190px; --notch-h:36px; --thick:2.5px; --glow:9px; --radius:14px;
+    --stage-pad:26px;
+    --bg:#050506; --line:#1c1c22; --dim:#8c8c92; --panel:#0d0d10; --txt:#e9e9ea;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+
+  /* ---------- brand header (shared treatment across all pages) ---------- */
+  header.brandbar{display:flex;align-items:center;padding:16px 24px;
+      background:linear-gradient(#101014,#0a0a0d);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:.2px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 9px var(--calm)}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px;margin-left:2px;letter-spacing:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+      color:#6c6c72;margin:0 0 8px}
+
+  .top{max-width:1180px;margin:0 auto;padding:28px 20px 4px}
+  .sub{color:var(--dim);margin:0 0 6px;max-width:800px;font-size:13px;line-height:1.65}
+  .sub b{color:#c7c7cc;font-weight:600}
+
+  /* ---------- at-a-glance legend (all four states, side by side) ---------- */
+  .legend{max-width:1180px;margin:22px auto 6px;padding:0 20px;
+      display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  @media (max-width:900px){ .legend{grid-template-columns:repeat(2,1fr)} }
+  .chip{background:#0b0b0d;border:1px solid #1a1a1e;border-radius:14px;padding:13px 15px;
+      cursor:pointer;text-align:left;color:var(--txt);font:inherit;
+      transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+  .chip:hover{background:#101013}
+  .chip.on{border-color:var(--chip-c,#fff);box-shadow:0 0 0 1px var(--chip-c,#fff) inset}
+  .chip .head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .chip .swatch{width:9px;height:9px;border-radius:50%;flex:none;background:var(--chip-c,#8c8c92);
+      box-shadow:0 0 7px var(--chip-c,transparent)}
+  .chip.waiting .swatch{background:transparent;border:1.5px solid rgba(255,255,255,.3);box-shadow:none}
+  .chip .name{font-weight:600;font-size:13px}
+  .chip p{margin:0;color:#8c8c92;font-size:11.8px;line-height:1.5}
+
+  /* ---------- interactive stage: notched + non-notch, side by side ---------- */
+  .stagegrid{max-width:1180px;margin:26px auto 0;padding:0 20px;
+      display:grid;grid-template-columns:1.3fr 1fr;gap:22px;align-items:start}
+  @media (max-width:900px){ .stagegrid{grid-template-columns:1fr} }
+  .card{background:#0b0b0d;border:1px solid #1a1a1e;border-radius:16px;overflow:hidden;
+      box-shadow:0 24px 50px -28px rgba(0,0,0,.6)}
+  .card h3{margin:0;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:.4px;
+      text-transform:uppercase;color:#8c8c92;border-bottom:1px solid var(--line);
+      display:flex;align-items:center;justify-content:space-between}
+  .card h3 .badge{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:none;
+      color:#6c6c72;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);
+      padding:2px 8px;border-radius:20px}
+
+  .stage{position:relative;height:230px;background:linear-gradient(#0a0a0c,#050506 65%);overflow:visible}
+  .menubar{position:absolute;top:var(--stage-pad);left:0;right:0;height:var(--notch-h);
+      background:#111114;display:flex;align-items:center;justify-content:flex-end;
+      gap:14px;padding:0 16px;color:#c7c7cc;font-size:12px;z-index:5}
+  .led{width:10px;height:10px;border-radius:50%;
+      background:color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      box-shadow:0 0 calc(4px + 6px*var(--lum)) color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      opacity:calc(.32 + .68*var(--lum));
+      transition:opacity var(--fade) cubic-bezier(.33,.9,.36,1),
+                 box-shadow var(--fade) cubic-bezier(.33,.9,.36,1),
+                 background var(--fade) ease,border-color .4s ease;
+      flex:none}
+  .led.no-signal{background:transparent!important;border:1.5px solid rgba(255,255,255,.32);
+      box-shadow:none!important;opacity:1!important}
+
+  /* notch + halo (notched card only) */
+  .notchwrap{position:absolute;top:var(--stage-pad);left:50%;transform:translateX(-50%);
+      width:var(--notch-w);height:var(--notch-h)}
+  .halo{position:absolute;top:0;left:calc(-1*var(--thick));
+      width:calc(var(--notch-w) + 2*var(--thick));height:calc(var(--notch-h) + var(--thick));
+      border:var(--thick) solid color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));border-top:none;
+      border-bottom-left-radius:calc(var(--radius) + 2px);
+      border-bottom-right-radius:calc(var(--radius) + 2px);
+      opacity:calc(.16 + .84*var(--lum));
+      filter:drop-shadow(0 0 calc(var(--glow)*(.35 + .8*var(--lum)))
+                 color-mix(in srgb, color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%)) calc(45% + 55%*var(--lum)), transparent))
+             drop-shadow(0 0 calc(var(--glow)*(.9 + 1.7*var(--lum)))
+                 color-mix(in srgb, color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%)) calc(22% + 40%*var(--lum)), transparent));
+      transition:opacity var(--fade) cubic-bezier(.33,.9,.36,1),
+                 filter var(--fade) cubic-bezier(.33,.9,.36,1),
+                 border-color var(--fade) ease}
+  .halo.no-signal{opacity:0}
+  .notch{position:absolute;top:0;left:0;width:var(--notch-w);height:var(--notch-h);
+      background:#000;border-bottom-left-radius:var(--radius);
+      border-bottom-right-radius:var(--radius);z-index:2}
+  .dashring{position:absolute;top:0;left:calc(-1*var(--thick));
+      width:calc(var(--notch-w) + 2*var(--thick));height:calc(var(--notch-h) + var(--thick));
+      border:1.5px dashed rgba(255,255,255,.17);border-top:none;
+      border-bottom-left-radius:calc(var(--radius) + 2px);
+      border-bottom-right-radius:calc(var(--radius) + 2px);
+      opacity:0;transition:opacity var(--fade) ease;pointer-events:none}
+  .dashring.show{opacity:1}
+
+  /* readout pill (Bleed) + freshness tag */
+  .pill{position:absolute;top:calc(var(--stage-pad) + var(--notch-h) + 10px);left:50%;
+      transform:translateX(-50%);
+      opacity:1;background:rgba(30,30,33,.85);backdrop-filter:blur(18px);
+      -webkit-backdrop-filter:blur(18px);border-radius:14px;padding:8px 16px;
+      white-space:nowrap;box-shadow:0 6px 22px rgba(0,0,0,.45);z-index:3;
+      transition:opacity .3s ease,transform .3s ease;font-size:12.8px}
+  .pill.hidden{opacity:0;transform:translateX(-50%) translateY(-4px);pointer-events:none}
+  .pill b{color:color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      font-variant-numeric:tabular-nums;font-weight:600;transition:color var(--fade) ease}
+  .pill .sep{color:rgba(255,255,255,.35);margin:0 9px}
+  .pill .reset{color:rgba(255,255,255,.82);font-variant-numeric:tabular-nums}
+  .fresh-tag{font-size:11px;padding:2px 9px;border-radius:20px;margin-left:9px;
+      font-variant-numeric:tabular-nums;letter-spacing:.1px;
+      transition:background .4s ease,color .4s ease,border-color .4s ease}
+  .fresh-tag.stale{background:rgba(255,255,255,.06);color:#c7c7cc;border:1px solid rgba(255,255,255,.12)}
+  .fresh-tag.refilled{background:rgba(48,209,88,.14);color:var(--calm);border:1px solid rgba(48,209,88,.35)}
+  .fresh-tag.empty{display:none}
+  /* stale age: a quiet secondary line CENTERED BELOW the pill — blended into the dark
+     bg, low contrast, so the pill itself never widens to carry the age text. */
+  .age-sub{font-size:10.5px;letter-spacing:.2px;color:rgba(233,233,234,.34);
+      font-variant-numeric:tabular-nums;text-align:center;white-space:nowrap}
+  .main-age,.fvs-age{position:absolute;left:50%;transform:translateX(-50%);
+      top:calc(var(--stage-pad) + var(--notch-h) + 52px);
+      opacity:0;transition:opacity var(--fade) ease;pointer-events:none}
+  .main-age.show,.fvs-age{opacity:1}
+
+  .waiting-msg{position:absolute;top:calc(var(--stage-pad) + var(--notch-h) + 10px);left:50%;
+      transform:translateX(-50%);text-align:center;opacity:0;transition:opacity var(--fade) ease;
+      pointer-events:none;width:220px}
+  .waiting-msg.show{opacity:1}
+  .waiting-msg .m1{color:#c7c7cc;font-size:12.8px}
+  .waiting-msg .m2{color:#6c6c72;font-size:11.2px;margin-top:5px;line-height:1.5}
+
+  .mbpct{font-variant-numeric:tabular-nums;transition:opacity .3s ease}
+
+  .caption{padding:12px 16px 14px;border-top:1px solid var(--line);
+      color:#8c8c92;font-size:12.3px;line-height:1.55;min-height:52px}
+  .caption b{color:#d4d4da;font-weight:600}
+
+  /* ---------- controls ---------- */
+  .panel{max-width:1180px;margin:8px auto 60px;padding:24px 20px 0}
+  .panel .eyebrow{margin-top:6px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;align-items:center}
+  .row .lbl{width:150px;color:#a1a1a8;font-size:12px;flex-shrink:0}
+  .row .val{color:#c7c7cc;font-size:12px;font-variant-numeric:tabular-nums;min-width:64px}
+  button{background:#1c1c20;color:var(--txt);border:1px solid #2c2c31;border-radius:9px;
+      padding:7px 14px;cursor:pointer;font:inherit;font-size:13px;
+      transition:background .15s cubic-bezier(.4,0,.2,1),border-color .15s cubic-bezier(.4,0,.2,1),
+        box-shadow .15s cubic-bezier(.4,0,.2,1),opacity .15s ease}
+  button:hover{background:#26262b;border-color:#37373d}
+  button.on{border-color:var(--c);color:#fff;box-shadow:0 0 0 1px var(--c) inset}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  input[type=range]{width:200px;accent-color:var(--c)}
+  input[type=range]:disabled{opacity:.35}
+  .hint{color:#6c6c72;font-size:12px}
+  code{background:#161619;padding:1px 6px;border-radius:5px;color:#c7c7cc}
+
+  /* ---------- Readout pill sizing ---------- */
+  .pz{max-width:1180px;margin:6px auto 60px;padding:0 20px}
+  .pz .eyebrow{margin:0 0 8px}
+  .pz .sub{margin:0 0 4px}
+  .pz-card{background:#0b0b0d;border:1px solid #1a1a1e;border-radius:16px;overflow:hidden;
+      box-shadow:0 24px 50px -28px rgba(0,0,0,.6);margin-top:16px}
+  .pz-stage{position:relative;--pz-notch-w:179px;--pz-notch-h:32px;--pz-floor:1;--lum:1;
+      background:linear-gradient(#0a0a0c,#050506 72%);overflow:visible;padding:0 0 30px}
+  .pz-strip{height:34px;background:#111114;display:flex;align-items:center;justify-content:flex-end;
+      gap:14px;padding:0 16px;color:#c7c7cc;font-size:12px;position:relative;z-index:2}
+  .pz-strip .led-mini{width:10px;height:10px;border-radius:50%;
+      background:color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      box-shadow:0 0 calc(4px + 5px*var(--lum)) color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      opacity:calc(.32 + .68*var(--lum));
+      transition:opacity var(--fade) ease,box-shadow var(--fade) ease,background var(--fade) ease}
+  /* notch-width reference guides */
+  .pz-guide{position:absolute;top:34px;bottom:14px;width:0;
+      border-left:1px dashed rgba(255,255,255,.16);z-index:0}
+  .pz-guide.l{left:calc(50% - var(--pz-notch-w)/2)}
+  .pz-guide.r{left:calc(50% + var(--pz-notch-w)/2)}
+  .pz-guidecap{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:1;
+      font-size:10.5px;letter-spacing:.3px;color:#7a7a80;font-variant-numeric:tabular-nums;
+      display:flex;align-items:center;gap:7px;white-space:nowrap}
+  .pz-guidecap .arm{display:inline-block;width:calc((var(--pz-notch-w) - 96px)/2);height:1px;
+      background:rgba(255,255,255,.18)}
+  /* notch + its halo */
+  .pz-notchwrap{position:absolute;top:0;left:50%;transform:translateX(-50%);
+      width:var(--pz-notch-w);height:var(--pz-notch-h);z-index:2}
+  .pz-halo{position:absolute;top:0;left:-2.5px;
+      width:calc(var(--pz-notch-w) + 5px);height:calc(var(--pz-notch-h) + 2.5px);
+      border:2.5px solid color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));border-top:none;
+      border-bottom-left-radius:16px;border-bottom-right-radius:16px;
+      opacity:calc(.16 + .84*var(--lum));
+      filter:drop-shadow(0 0 calc(9px*(.35 + .8*var(--lum)))
+                 color-mix(in srgb, color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%)) calc(45% + 55%*var(--lum)), transparent));
+      transition:opacity var(--fade) cubic-bezier(.33,.9,.36,1),
+                 filter var(--fade) cubic-bezier(.33,.9,.36,1),border-color var(--fade) ease}
+  .pz-notch{position:absolute;top:0;left:0;width:var(--pz-notch-w);height:var(--pz-notch-h);
+      background:#000;border-bottom-left-radius:14px;border-bottom-right-radius:14px;z-index:2}
+  /* stacked comparison pills */
+  .pz-body{padding-top:70px;display:flex;flex-direction:column;gap:16px}
+  .pz-row{position:relative;display:flex;justify-content:center;align-items:center}
+  .pz-key{position:absolute;left:16px;top:50%;transform:translateY(-50%);
+      display:flex;flex-direction:column;gap:1px;min-width:96px}
+  .pz-key b{font-size:12.5px;font-weight:700;color:#d4d4da}
+  .pz-key small{font-size:10.5px;color:#6c6c72}
+  .pz-key .tick{display:inline-block;margin-top:3px;font-size:9.5px;font-weight:700;
+      letter-spacing:.3px;text-transform:uppercase;color:var(--calm);
+      background:rgba(48,209,88,.13);border:1px solid rgba(48,209,88,.32);
+      border-radius:20px;padding:2px 7px;width:max-content}
+  .pz-pill{position:relative;display:inline-flex;align-items:center;justify-content:center;
+      min-width:calc(var(--pz-notch-w)*var(--pz-floor));
+      background:rgba(30,30,33,.85);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+      border-radius:14px;padding:8px 16px;white-space:nowrap;
+      box-shadow:0 6px 22px rgba(0,0,0,.45);font-size:12.8px;
+      opacity:calc(.6 + .4*var(--lum));transform-origin:top center;
+      transition:min-width .55s cubic-bezier(.22,1,.32,1.06),
+                 opacity var(--fade) ease,transform .5s cubic-bezier(.22,1,.32,1.06)}
+  .pz-pill.bleeding{opacity:0;transform:scaleX(.42) scaleY(.12)}
+  .pz-pill b{color:color-mix(in srgb, var(--c), var(--mute) calc(var(--desat) * 1%));
+      font-weight:600;font-variant-numeric:tabular-nums;transition:color var(--fade) ease}
+  .pz-pill .pz-sep{color:rgba(255,255,255,.34);margin:0 8px}
+  .pz-pill .pz-reset{color:rgba(255,255,255,.82);font-variant-numeric:tabular-nums}
+  /* pill + its quiet age sub-label stack, centred, so the pill keeps its own width */
+  .pz-pillcol{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .pz-w{position:absolute;right:16px;top:50%;transform:translateY(-50%);text-align:right;
+      display:flex;flex-direction:column;gap:1px;min-width:110px}
+  .pz-w .rend{font-size:12.5px;font-weight:600;color:#d4d4da;font-variant-numeric:tabular-nums}
+  .pz-w .rat{font-size:10.5px;color:#8c8c92;font-variant-numeric:tabular-nums}
+  .pz-w .nat{font-size:10px;color:#6c6c72;font-variant-numeric:tabular-nums}
+  @media (max-width:720px){ .pz-key,.pz-w{position:static;transform:none;text-align:center;
+      align-items:center;margin:0 auto} .pz-row{flex-direction:column;gap:6px} }
+  .pz-controls{padding:18px 20px 20px;border-top:1px solid var(--line);
+      background:linear-gradient(#0a0a0d,#0c0c10)}
+  .pz-note{margin:14px 20px 22px;padding:12px 14px;border-radius:12px;
+      border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);
+      color:#8c8c92;font-size:12px;line-height:1.6}
+  .pz-note b{color:#d4d4da;font-weight:600}
+  .pz-note .k{color:var(--watch);font-weight:600}
+
+  /* ---------- fade vs stale ---------- */
+  .fvs{max-width:1180px;margin:6px auto 8px;padding:0 20px}
+  .fvs .eyebrow{margin:0 0 8px}
+  .fvs .sub{margin:0 0 6px}
+  .fvs-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:16px}
+  @media (max-width:760px){ .fvs-grid{grid-template-columns:1fr} }
+  .fvs-cell{background:#0b0b0d;border:1px solid #1a1a1e;border-radius:16px;overflow:hidden;
+      box-shadow:0 24px 50px -28px rgba(0,0,0,.6)}
+  .fvs-cell h4{margin:0;padding:12px 16px;font-size:12px;font-weight:700;letter-spacing:.4px;
+      text-transform:uppercase;color:#8c8c92;border-bottom:1px solid var(--line);
+      display:flex;align-items:center;gap:9px}
+  .fvs-cell h4 .badge{font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:none;
+      padding:2px 9px;border-radius:20px}
+  .fvs-cell.live h4 .badge{color:var(--watch);background:rgba(255,214,10,.13);
+      border:1px solid rgba(255,214,10,.32)}
+  .fvs-cell.stale h4 .badge{color:#c7c7cc;background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.12)}
+  .fvs-cap{padding:0 16px 15px;color:#8c8c92;font-size:12.2px;line-height:1.55}
+  .fvs-cap b{color:#d4d4da;font-weight:600}
+  /* a live fade: transient opacity breath, full saturation kept */
+  @keyframes fvsHaloFade{0%,100%{opacity:.9}52%{opacity:.26}}
+  .halo.fvs-fade{animation:fvsHaloFade 2.6s ease-in-out infinite}
+  @keyframes fvsLedFade{0%,100%{opacity:.95}52%{opacity:.34}}
+  .led.fvs-fade{animation:fvsLedFade 2.6s ease-in-out infinite}
+  .fvs-note{margin-top:16px;padding:13px 15px;border-radius:12px;
+      border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.025);
+      color:#a1a1a8;font-size:12.5px;line-height:1.6}
+  .fvs-note b{color:#e4e4e8;font-weight:600}
+  .fvs-note .tell{color:var(--watch);font-weight:600}
+</style>
+</head>
+<body>
+  <header class="brandbar">
+    <div class="brand"><span class="dot"></span>Lumos <small>freshness &amp; staleness — Live · Stale · Refilled · Waiting</small></div>
+  </header>
+
+  <div class="top">
+    <p class="eyebrow">Stale &amp; freshness states</p>
+    <p class="sub"><b>Stale data is not wrong data.</b> Used-% only rises when you send messages,
+      and the reset time is an absolute timestamp — so Lumos keeps showing the last-known numbers,
+      just visibly aged. Below are the four ways freshness reads on the Halo, the Readout, and the LED.</p>
+  </div>
+
+  <div class="legend" id="legend">
+    <button class="chip" data-mode="live" style="--chip-c:#ffd60a">
+      <div class="head"><span class="swatch"></span><span class="name">Live</span></div>
+      <p>Data &lt; 2 min old. Full-color Halo, live numbers.</p>
+    </button>
+    <button class="chip" data-mode="stale" style="--chip-c:#ffd60a">
+      <div class="head"><span class="swatch"></span><span class="name">Stale</span></div>
+      <p>Desaturated + dimmed (muted mustard). Frozen numbers, an age tag — resting, not broken.</p>
+    </button>
+    <button class="chip" data-mode="refilled" style="--chip-c:#30d158">
+      <div class="head"><span class="swatch"></span><span class="name">Refilled</span></div>
+      <p>Reset time has passed — we know it's fresh even with no new ping.</p>
+    </button>
+    <button class="chip waiting" data-mode="waiting" style="--chip-c:#8c8c92">
+      <div class="head"><span class="swatch"></span><span class="name">Waiting</span></div>
+      <p>No cache yet at all. Calm words, no color — never confused with Stale.</p>
+    </button>
+  </div>
+
+  <div class="stagegrid">
+    <div class="card">
+      <h3>Notched Mac <span class="badge">Halo + Bloom + Readout</span></h3>
+      <div class="stage">
+        <div class="menubar">
+          <span class="led" id="ledA"></span><span class="mbpct" id="mbA">65%</span>
+          <span>􀙇</span><span>Sat 1:24</span>
+        </div>
+        <div class="notchwrap">
+          <div class="dashring" id="dashring"></div>
+          <div class="halo" id="halo"></div>
+          <div class="notch"></div>
+        </div>
+        <div class="pill" id="pill">
+          <b id="pct">65% used</b><span class="sep">·</span><span class="reset" id="reset">resets 2h 14m</span><span class="fresh-tag empty" id="freshTag"></span>
+        </div>
+        <div class="age-sub main-age" id="staleSubA">stale · updated 6m ago</div>
+        <div class="waiting-msg" id="waitMsg">
+          <div class="m1">waiting for Claude Code…</div>
+          <div class="m2">Starts automatically on your next Claude Code interaction.</div>
+        </div>
+      </div>
+      <div class="caption" id="captionA">Live — full-color Halo, numbers straight from the last status-line tick.</div>
+    </div>
+
+    <div class="card">
+      <h3>Non-notch Mac <span class="badge">LED only</span></h3>
+      <div class="stage" style="height:118px">
+        <div class="menubar">
+          <span style="flex:1"></span><span class="led" id="ledB"></span><span class="mbpct" id="mbB">65%</span>
+          <span>􀙇</span><span>Sat 1:24</span>
+        </div>
+      </div>
+      <div class="caption" id="captionB">Older Macs and external displays have no notch to glow around — the
+        menu-bar LED alone carries the same freshness treatment: full, dimmed, fresh, or hollow.</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="eyebrow">Tune it by feel</p>
+    <p class="sub">The age slider is the live demo — drag it (or hit play) to watch Live calmly fade into
+      Stale right at the threshold. Refilled and Waiting are separate, fixed scenarios below.</p>
+
+    <div class="row"><span class="lbl">State</span>
+      <button data-mode="live" class="on">Live</button>
+      <button data-mode="stale">Stale</button>
+      <button data-mode="refilled">Refilled</button>
+      <button data-mode="waiting">Waiting</button>
+    </div>
+
+    <div class="row"><span class="lbl">Data age</span>
+      <input type="range" id="age" min="0" max="15" step="0.25" value="0.5">
+      <span class="val" id="ageVal">30s ago</span>
+      <span class="hint" id="ageHint">crosses into Stale at 5.0m</span>
+    </div>
+
+    <div class="row"><span class="lbl">Play the fade</span>
+      <button id="playBtn">▶ Watch it go stale</button>
+      <span class="hint">ages 0 → ~3× threshold over ~9s, real transition speed</span>
+    </div>
+
+    <div class="row"><span class="lbl">Staleness threshold</span>
+      <input type="range" id="threshold" min="1" max="10" step="0.5" value="5">
+      <span class="val" id="threshVal">5.0 min</span>
+      <span class="hint">default 5 min — how long before Live reads as Stale</span>
+    </div>
+
+    <div class="row"><span class="lbl">Stale desaturation</span>
+      <input type="range" id="desat" min="0" max="100" step="1" value="60">
+      <span class="val" id="desatVal">60%</span>
+      <span class="hint">greys the yellow toward muted mustard — 0% full colour, 100% neutral (never gray at default)</span>
+    </div>
+
+    <div class="row"><span class="lbl">Dim level</span>
+      <input type="range" id="dim" min="10" max="70" step="1" value="45">
+      <span class="val" id="dimVal">45%</span>
+      <span class="hint">brightness &amp; glow drop for Stale — pairs with the desaturation above</span>
+    </div>
+
+    <div class="row"><span class="lbl">Fade duration</span>
+      <input type="range" id="fadeDur" min="0.5" max="5" step="0.1" value="2.2">
+      <span class="val" id="fadeVal">2.2 s</span>
+      <span class="hint">Live→Stale eases slowly — calm, never a snap or a blink</span>
+    </div>
+
+    <p class="hint">Lexicon: <code>Halo</code> ring · <code>Bloom</code> glow · <code>Readout</code> pill ·
+      <code>LED</code> menu-bar dot · freshness <code>Live / Stale / Refilled / Waiting</code>.</p>
+  </div>
+
+  <!-- ============ fade vs stale ============ -->
+  <div class="fvs">
+    <p class="eyebrow">Fade vs Stale — not the same thing</p>
+    <p class="sub">A user asked: <b>“how do we tell a fade-out apart from stale data?”</b> Side by side, the
+      answer is obvious. A <b>fade</b> keeps full colour and <b>moves</b>; <b>Stale</b> is desaturated,
+      <b>dead still</b>, and carries a quiet age line beneath the pill.</p>
+
+    <div class="fvs-grid">
+      <div class="fvs-cell live">
+        <h4>Live fade <span class="badge">transient · moving</span></h4>
+        <div class="stage" style="--lum:1;--desat:0;--c:var(--watch);height:150px">
+          <div class="menubar">
+            <span class="led fvs-fade"></span><span class="mbpct">65%</span>
+            <span>􀙇</span><span>Sat 1:24</span>
+          </div>
+          <div class="notchwrap">
+            <div class="halo fvs-fade"></div>
+            <div class="notch"></div>
+          </div>
+          <div class="pill">
+            <b>65%</b><span class="sep">·</span><span class="reset">2h 14m</span>
+          </div>
+        </div>
+        <p class="fvs-cap"><b>Full amber, breathing.</b> The glow dips and lifts on a gentle loop —
+          the motion itself says “this is alive.” No age chip, full saturation throughout.</p>
+      </div>
+
+      <div class="fvs-cell stale">
+        <h4>Stale <span class="badge">steady · desaturated</span></h4>
+        <div class="stage" style="--lum:.55;--desat:60;--c:var(--watch);height:150px">
+          <div class="menubar">
+            <span class="led"></span><span class="mbpct">65%</span>
+            <span>􀙇</span><span>Sat 1:24</span>
+          </div>
+          <div class="notchwrap">
+            <div class="halo"></div>
+            <div class="notch"></div>
+          </div>
+          <div class="pill">
+            <b>65%</b><span class="sep">·</span><span class="reset">2h 14m</span>
+          </div>
+          <div class="age-sub fvs-age">stale · updated 6m ago</div>
+        </div>
+        <p class="fvs-cap"><b>Greyed-out mustard, perfectly still.</b> Desaturated and dimmed, no motion at
+          all, with a quiet <code>stale · updated 6m ago</code> line blended beneath the pill. Muted, not gone.</p>
+      </div>
+    </div>
+
+    <div class="fvs-note">
+      <b>The rule:</b> a fade keeps <span class="tell">full colour</span> and <span class="tell">moves</span>
+      (transient); stale is <span class="tell">desaturated</span>, <span class="tell">steady</span>, and
+      wears a quiet <span class="tell">age sub-label</span>. The sub-label + desaturation + stillness are the tells.
+    </div>
+  </div>
+
+  <!-- ============ Readout pill sizing ============ -->
+  <div class="pz">
+    <p class="eyebrow">Readout pill sizing</p>
+    <p class="sub">Feedback from the live app: the resting Readout <b>sprawls far past the notch</b> because it
+      packs three segments (<code>65% used · resets 6:05 PM IST · wk 41%</code>). The fix is to trim the
+      resting pill to <b>“similar or a bit longer than the notch”</b> and push the full detail to hover/click.
+      Compare the three densities below against the real <b>179&nbsp;pt</b> notch.</p>
+
+    <div class="pz-card">
+      <div class="pz-stage" id="pzStage">
+        <div class="pz-guide l"></div>
+        <div class="pz-guide r"></div>
+        <div class="pz-strip">
+          <span class="led-mini"></span><span>65%</span><span>􀙇</span><span>Sat 1:24</span>
+        </div>
+        <div class="pz-notchwrap">
+          <div class="pz-halo"></div>
+          <div class="pz-notch"></div>
+        </div>
+        <div class="pz-guidecap"><span class="arm"></span>179 pt notch<span class="arm"></span></div>
+
+        <div class="pz-body" id="pzBody">
+          <div class="pz-row" data-opt="A">
+            <span class="pz-key"><b>A</b><small>minimal</small></span>
+            <div class="pz-pillcol"><div class="pz-pill"><b>65%</b></div></div>
+            <div class="pz-w"><span class="rend">—</span><span class="rat">—</span><span class="nat">—</span></div>
+          </div>
+          <div class="pz-row" data-opt="B">
+            <span class="pz-key"><b>B</b><small>compact</small><span class="tick">recommended</span></span>
+            <div class="pz-pillcol"><div class="pz-pill"><b>65%</b><span class="pz-sep">·</span><span class="pz-reset">2h 14m</span></div></div>
+            <div class="pz-w"><span class="rend">—</span><span class="rat">—</span><span class="nat">—</span></div>
+          </div>
+          <div class="pz-row" data-opt="C">
+            <span class="pz-key"><b>C</b><small>a bit longer</small></span>
+            <div class="pz-pillcol"><div class="pz-pill"><b>65% used</b><span class="pz-sep">·</span><span class="pz-reset">resets 2h 14m</span></div></div>
+            <div class="pz-w"><span class="rend">—</span><span class="rat">—</span><span class="nat">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pz-controls">
+        <div class="row"><span class="lbl">Width floor</span>
+          <input type="range" id="pzFloor" min="1" max="1.35" step="0.01" value="1">
+          <span class="val" id="pzFloorVal">1.00× notch</span>
+          <span class="hint">dial from “= notch width” to “a bit longer” — the sliver still Bleeds out of the notch</span>
+        </div>
+        <div class="row"><span class="lbl">Freshness</span>
+          <button id="pzLive" class="on">Live · full amber</button>
+          <button id="pzStale">Stale · dimmed + age chip</button>
+          <button id="pzReplay">↻ Replay Bleed</button>
+        </div>
+      </div>
+
+      <div class="pz-note">
+        <b>The resting pill stays glanceable.</b> The full detail — the absolute reset
+        <span class="k">6:05 PM IST</span> and the weekly <span class="k">wk 41%</span> — moves to the
+        <b>click HUD / hover-expand</b>, never the resting pill. <b>B</b> is the default: it reads at a
+        glance and holds notch width even in Stale — the <code>stale · updated&nbsp;Xm&nbsp;ago</code> text
+        sits as a quiet sub-label <b>below</b> the pill, so the pill never widens to carry it.
+      </div>
+    </div>
+  </div>
+
+<script>
+  const root=document.documentElement;
+  const halo=document.getElementById('halo'), dashring=document.getElementById('dashring'),
+        pill=document.getElementById('pill'), pct=document.getElementById('pct'),
+        reset=document.getElementById('reset'), freshTag=document.getElementById('freshTag'),
+        staleSubA=document.getElementById('staleSubA'), waitMsg=document.getElementById('waitMsg'),
+        ledA=document.getElementById('ledA'), ledB=document.getElementById('ledB'),
+        mbA=document.getElementById('mbA'), mbB=document.getElementById('mbB'),
+        captionA=document.getElementById('captionA'), captionB=document.getElementById('captionB');
+
+  const MODES={
+    live:{
+      colorVar:'--watch', pct:'65% used', reset:'resets 2h 14m', mb:'65%',
+      captionA:'<b>Live</b> — data under the freshness threshold. Full-color Halo, numbers straight from the last status-line tick.',
+      captionB:'<b>Live</b> — the LED sits at full color and full glow, same as the Halo.'
+    },
+    stale:{
+      colorVar:'--watch', pct:'65% used', reset:'resets 2h 14m', mb:'65%',
+      captionA:'<b>Stale</b> — the amber is <i>desaturated and dimmed</i> into a muted mustard: still unmistakably the Watch hue, but clearly greyed. The 65% and reset time are frozen at last-known — not changed, just aged. Reads as "resting", never an error or a different state.',
+      captionB:'<b>Stale</b> — the LED greys toward mustard and dims in step with the Halo, so a glance at just the menu bar tells the same story.'
+    },
+    refilled:{
+      colorVar:'--calm', pct:'0% used', reset:'resets 4h 59m', mb:'0%',
+      captionA:'<b>Refilled</b> — the reset time has passed, so even with no fresh ping we <i>know</i> the window topped up. Snaps straight to a calm, full-brightness Halo at ~0% used.',
+      captionB:'<b>Refilled</b> — LED returns to full calm green immediately, no dimmed in-between.'
+    },
+    waiting:{
+      colorVar:null, mb:'—',
+      captionA:'<b>Waiting</b> — no cache at all yet (fresh install, or the tee hasn’t fired). No state color, just a calm human sentence. Distinct from Stale, which always has an old number to show.',
+      captionB:'<b>Waiting</b> — the LED is hollow, not colored and not dimmed: there has never been data, so there’s nothing to rest on.'
+    }
+  };
+
+  let mode='live', ageMin=0.5, thresholdMin=5, dimAmt=0.45, desatAmt=0.60, fadeSec=2.2;
+
+  const ageEl=document.getElementById('age'), ageVal=document.getElementById('ageVal'), ageHint=document.getElementById('ageHint'),
+        threshEl=document.getElementById('threshold'), threshVal=document.getElementById('threshVal'),
+        dimEl=document.getElementById('dim'), dimVal=document.getElementById('dimVal'),
+        desatEl=document.getElementById('desat'), desatVal=document.getElementById('desatVal'),
+        fadeEl=document.getElementById('fadeDur'), fadeVal=document.getElementById('fadeVal'),
+        playBtn=document.getElementById('playBtn');
+
+  function ageApplies(m){ return m==='live'||m==='stale'; }
+
+  function formatAge(min){
+    if(min<1) return Math.round(min*60)+'s ago';
+    const m=Math.round(min);
+    return m+'m ago';
+  }
+
+  function recomputeAging(){
+    if(!ageApplies(mode)) return;
+    mode = ageMin < thresholdMin ? 'live' : 'stale';
+  }
+
+  function render(){
+    const cfg=MODES[mode];
+    if(cfg.colorVar) root.style.setProperty('--c', `var(${cfg.colorVar})`);
+    const lum = mode==='stale' ? (1-dimAmt) : 1;
+    root.style.setProperty('--lum', lum);
+    root.style.setProperty('--desat', mode==='stale' ? Math.round(desatAmt*100) : 0);
+    root.style.setProperty('--fade', fadeSec+'s');
+
+    const waiting = mode==='waiting';
+    halo.classList.toggle('no-signal', waiting);
+    dashring.classList.toggle('show', waiting);
+    ledA.classList.toggle('no-signal', waiting);
+    ledB.classList.toggle('no-signal', waiting);
+    pill.classList.toggle('hidden', waiting);
+    waitMsg.classList.toggle('show', waiting);
+
+    if(!waiting){
+      pct.textContent=cfg.pct;
+      reset.textContent=cfg.reset;
+      mbA.style.opacity=1; mbB.style.opacity=1;
+      mbA.textContent=cfg.mb; mbB.textContent=cfg.mb;
+      if(mode==='stale'){
+        freshTag.className='fresh-tag empty';
+        staleSubA.textContent='stale · updated '+formatAge(ageMin);
+        staleSubA.classList.add('show');
+      } else if(mode==='refilled'){
+        freshTag.textContent='refilled · 0% used';
+        freshTag.className='fresh-tag refilled';
+        staleSubA.classList.remove('show');
+      } else {
+        freshTag.className='fresh-tag empty';
+        staleSubA.classList.remove('show');
+      }
+    } else {
+      mbA.textContent='—'; mbB.textContent='—';
+      freshTag.className='fresh-tag empty';
+      staleSubA.classList.remove('show');
+    }
+
+    captionA.innerHTML=cfg.captionA;
+    captionB.innerHTML=cfg.captionB;
+
+    document.querySelectorAll('[data-mode]').forEach(el=>el.classList.toggle('on', el.dataset.mode===mode));
+
+    ageEl.disabled = !ageApplies(mode);
+    ageHint.textContent = ageApplies(mode)
+      ? `crosses into Stale at ${thresholdMin.toFixed(1)}m`
+      : 'age doesn’t apply to this scenario';
+  }
+
+  function setMode(m){
+    mode=m;
+    if(m==='live') ageMin=Math.min(0.5, thresholdMin*0.2);
+    if(m==='stale') ageMin=thresholdMin+1;
+    if(ageApplies(m)) ageEl.value=ageMin;
+    ageVal.textContent=formatAge(ageMin);
+    render();
+  }
+
+  document.querySelectorAll('[data-mode]').forEach(el=>{
+    el.addEventListener('click', ()=>setMode(el.dataset.mode));
+  });
+
+  ageEl.oninput=e=>{
+    ageMin=parseFloat(e.target.value);
+    ageVal.textContent=formatAge(ageMin);
+    recomputeAging();
+    render();
+  };
+
+  threshEl.oninput=e=>{
+    thresholdMin=parseFloat(e.target.value);
+    threshVal.textContent=thresholdMin.toFixed(1)+' min';
+    recomputeAging();
+    render();
+  };
+
+  dimEl.oninput=e=>{
+    dimAmt=parseInt(e.target.value)/100;
+    dimVal.textContent=e.target.value+'%';
+    render();
+  };
+
+  desatEl.oninput=e=>{
+    desatAmt=parseInt(e.target.value)/100;
+    desatVal.textContent=e.target.value+'%';
+    render();
+  };
+
+  fadeEl.oninput=e=>{
+    fadeSec=parseFloat(e.target.value);
+    fadeVal.textContent=fadeSec.toFixed(1)+' s';
+    render();
+  };
+
+  let playRaf=null;
+  playBtn.onclick=()=>{
+    if(playRaf) cancelAnimationFrame(playRaf);
+    if(!ageApplies(mode)) setMode('live'); else { ageMin=0; }
+    ageEl.value=0;
+    const start=performance.now(), duration=9000, endAge=Math.max(8, thresholdMin*3);
+    playBtn.disabled=true;
+    function step(t){
+      const p=Math.min(1, (t-start)/duration);
+      ageMin = p*endAge;
+      ageEl.value=ageMin;
+      ageVal.textContent=formatAge(ageMin);
+      recomputeAging();
+      render();
+      if(p<1){ playRaf=requestAnimationFrame(step); }
+      else { playBtn.disabled=false; playRaf=null; }
+    }
+    playRaf=requestAnimationFrame(step);
+  };
+
+  render();
+
+  /* ============================================================
+     Readout pill sizing
+     ============================================================ */
+  (function(){
+    const NOTCH=179;                    // pt, matches --pz-notch-w
+    const STALE_LUM=0.55, STALE_DESAT=60;
+    const stage=document.getElementById('pzStage'),
+          rows=[...document.getElementById('pzBody').querySelectorAll('.pz-row')],
+          floorEl=document.getElementById('pzFloor'), floorVal=document.getElementById('pzFloorVal'),
+          liveBtn=document.getElementById('pzLive'), staleBtn=document.getElementById('pzStale'),
+          replayBtn=document.getElementById('pzReplay');
+    let floor=1, stale=false;
+
+    stage.style.setProperty('--c','var(--watch)');
+    stage.style.setProperty('--lum',1);
+    stage.style.setProperty('--desat',0);
+
+    // natural width = pill sized to content only (min-width removed), measured via an
+    // offscreen clone so the visible pill is never disturbed mid-transition.
+    function naturalWidth(pill){
+      const clone=pill.cloneNode(true);
+      clone.style.minWidth='0'; clone.style.position='absolute';
+      clone.style.left='-9999px'; clone.style.top='0'; clone.style.visibility='hidden';
+      stage.appendChild(clone);
+      const w=clone.getBoundingClientRect().width;
+      clone.remove();
+      return w;
+    }
+
+    function measure(){
+      rows.forEach(row=>{
+        const pill=row.querySelector('.pz-pill');
+        const nat=naturalWidth(pill);
+        const rend=Math.max(nat, NOTCH*floor);
+        row.querySelector('.nat').textContent='content '+Math.round(nat)+' pt';
+        row.querySelector('.rend').textContent=Math.round(rend)+' pt';
+        row.querySelector('.rat').textContent=(rend/NOTCH).toFixed(2)+'× notch';
+      });
+    }
+
+    function applyFreshness(){
+      stage.style.setProperty('--lum', stale?STALE_LUM:1);
+      stage.style.setProperty('--desat', stale?STALE_DESAT:0);
+      liveBtn.classList.toggle('on',!stale);
+      staleBtn.classList.toggle('on',stale);
+      rows.forEach(row=>{
+        const col=row.querySelector('.pz-pillcol');
+        let sub=col.querySelector('.pz-sublabel');
+        if(stale){
+          if(!sub){ sub=document.createElement('div'); sub.className='age-sub pz-sublabel'; col.appendChild(sub); }
+          sub.textContent='stale · updated 6m ago';
+        } else if(sub){ sub.remove(); }
+      });
+      measure();
+    }
+
+    function replayBleed(){
+      rows.forEach(pillRow=>{
+        const pill=pillRow.querySelector('.pz-pill');
+        pill.classList.add('bleeding');
+        void pill.offsetWidth;               // force reflow so the transition replays
+        requestAnimationFrame(()=>pill.classList.remove('bleeding'));
+      });
+    }
+
+    floorEl.oninput=e=>{
+      floor=parseFloat(e.target.value);
+      floorVal.textContent=floor.toFixed(2)+'× notch';
+      stage.style.setProperty('--pz-floor',floor);
+      measure();
+    };
+    liveBtn.onclick=()=>{ stale=false; applyFreshness(); };
+    staleBtn.onclick=()=>{ stale=true; applyFreshness(); };
+    replayBtn.onclick=replayBleed;
+
+    applyFreshness();
+    requestAnimationFrame(measure);
+  })();
+</script>
+</body>
+</html>

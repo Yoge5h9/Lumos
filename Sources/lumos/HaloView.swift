@@ -92,9 +92,9 @@ final class HaloView: NSView {
 
     // MARK: - Color & glow
 
-    func setColor(_ color: NSColor, animated: Bool) {
+    func setColor(_ color: NSColor, animated: Bool, duration: CFTimeInterval = 0.4) {
         self.color = color
-        applyGlow(animated: animated)
+        applyGlow(animated: animated, duration: duration)
     }
 
     /// Sets the current brightness (`0...1`) and repaints. `duration` drives the

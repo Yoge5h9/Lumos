@@ -76,22 +76,16 @@ final class OnboardingController: NSObject, NSWindowDelegate {
             stack.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
 
-        let mark = NSView()
-        mark.wantsLayer = true
-        mark.layer?.cornerRadius = 7
-        let calm = NSColor(hex: "#30D158") ?? .systemGreen
-        mark.layer?.backgroundColor = calm.cgColor
-        mark.layer?.shadowColor = calm.cgColor
-        mark.layer?.shadowRadius = 10
-        mark.layer?.shadowOpacity = 0.9
-        mark.layer?.shadowOffset = .zero
-        mark.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            mark.widthAnchor.constraint(equalToConstant: 14),
-            mark.heightAnchor.constraint(equalToConstant: 14)
-        ])
-        stack.addArrangedSubview(mark)
-        stack.setCustomSpacing(18, after: mark)
+        if let mark = OnboardingMark.image() {
+            let markSize: CGFloat = 48
+            let markView = NSImageView(image: mark)
+            markView.imageScaling = .scaleProportionallyUpOrDown
+            markView.translatesAutoresizingMaskIntoConstraints = false
+            markView.widthAnchor.constraint(equalToConstant: markSize).isActive = true
+            markView.heightAnchor.constraint(equalToConstant: markSize).isActive = true
+            stack.addArrangedSubview(markView)
+            stack.setCustomSpacing(10, after: markView)
+        }
 
         let title = label("Lumos", size: 22, weight: .semibold, color: .white)
         title.alignment = .center
@@ -99,7 +93,7 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         stack.setCustomSpacing(8, after: title)
 
         let subtitle = label(
-            "A calm glow that shows how much of your Claude 5-hour window is left — at a glance, without opening anything.",
+            "Lumos lights up the dark — always see, at a glance, how much of your Claude 5-hour window is left.",
             size: 13, weight: .regular, color: NSColor.white.withAlphaComponent(0.6)
         )
         subtitle.alignment = .center
@@ -109,13 +103,24 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         stack.setCustomSpacing(22, after: subtitle)
 
         let bullets = [
-            ("Local & private", "Reads Claude Code's status-line data on this Mac. No network, no accounts, no API keys."),
-            ("Two surfaces", "A colored glow around the notch and a dot in the menu bar — green is healthy, red is near the limit."),
-            ("You're in control", "Click the menu-bar dot to toggle surfaces, tune notifications, or quit. Hover it for the exact numbers.")
+            ("Two ways to see it", "A soft glow around the notch, and a dot in the menu bar. Calm green, warming to amber, then red as your window fills."),
+            ("Tips worth knowing", "Every so often, a quiet notification with a Claude Code tip."),
+            ("You're in control", "Everything lives in the menu-bar dot: toggle the notch or the dot, tune notifications, or quit. Hover for the exact numbers."),
+            ("Local & private", "Reads Claude Code's status line on this Mac.")
         ]
         for (heading, detail) in bullets {
             stack.addArrangedSubview(bulletRow(heading: heading, detail: detail))
         }
+
+        let note = label(
+            "Updates as you use Claude Code in the terminal.",
+            size: 11, weight: .regular, color: NSColor.white.withAlphaComponent(0.4)
+        )
+        note.alignment = .center
+        note.maximumNumberOfLines = 0
+        note.preferredMaxLayoutWidth = contentWidth
+        stack.setCustomSpacing(24, after: stack.arrangedSubviews.last ?? note)
+        addFullWidth(note, to: stack)
 
         let button = NSButton(title: "Got it", target: self, action: #selector(dismissOnboarding))
         button.bezelStyle = .rounded
@@ -162,6 +167,10 @@ final class OnboardingController: NSObject, NSWindowDelegate {
         field.isEditable = false
         field.drawsBackground = false
         field.isBezeled = false
+        field.lineBreakMode = .byWordWrapping
+        field.cell?.wraps = true
+        field.cell?.isScrollable = false
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return field
     }
 

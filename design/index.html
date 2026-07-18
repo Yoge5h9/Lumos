@@ -51,6 +51,8 @@
       <button class="tab" data-f="1">Notifications <span>Context · Timing · Tip</span></button>
       <button class="tab" data-f="2">Non-notch Macs <span>2 finalists</span></button>
       <button class="tab" data-f="3">Interactions <span>glow fade · LED hover</span></button>
+      <button class="tab" data-f="4">Stale &amp; Freshness <span>Live · Stale · Refilled · Waiting</span></button>
+      <button class="tab" data-f="5">Icon / Mark <span>wand-casting-light concepts</span></button>
     </nav>
     <div class="spacer"></div>
     <a class="open" id="openRaw" href="showcase.html" target="_blank" rel="noopener">Open this one ↗</a>
@@ -60,12 +62,14 @@
     <iframe            src="notifications.html" title="Notifications"></iframe>
     <iframe            src="non-notch.html"     title="Non-notch Macs"></iframe>
     <iframe            src="interactions.html"  title="Interactions"></iframe>
+    <iframe            src="stale-states.html"  title="Stale & Freshness"></iframe>
+    <iframe            src="icon.html"          title="Icon / Mark"></iframe>
   </div>
 <script>
   const tabs=[...document.querySelectorAll('.tab')],
         frames=[...document.querySelectorAll('iframe')],
         openRaw=document.getElementById('openRaw'),
-        files=['showcase.html','notifications.html','non-notch.html','interactions.html'];
+        files=['showcase.html','notifications.html','non-notch.html','interactions.html','stale-states.html','icon.html'];
   function pick(i){
     tabs.forEach((t,n)=>t.classList.toggle('on',n===i));
     frames.forEach((f,n)=>f.classList.toggle('on',n===i));

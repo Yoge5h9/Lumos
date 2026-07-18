@@ -193,6 +193,24 @@ public enum ColorModel {
         )
     }
 
+    /// The state the latest snapshot's 5-hour window maps to *ignoring*
+    /// staleness — the last-known hue to freeze onto a Stale glow. Unlike
+    /// ``state(aggregate:now:burnRatePerSecond:)`` this never collapses to Idle
+    /// just because the data is old; it reads the frozen numbers as if live.
+    public static func lastKnownState(
+        aggregate: CacheAggregate,
+        now: Date = Date(),
+        burnRatePerSecond: Double? = nil
+    ) -> UsageState {
+        guard let fiveHour = aggregate.latestSnapshot?.fiveHour else { return .idle }
+        let timeLeft = fiveHour.resetsAt.map { Double($0) - now.timeIntervalSince1970 }
+        return state(
+            usedPercentage: fiveHour.usedPercentage,
+            timeLeftSeconds: timeLeft,
+            burnRatePerSecond: burnRatePerSecond
+        )
+    }
+
     /// The burn-escalation ramp: `0` at or below ``calmWatchThreshold``, rising
     /// linearly to `1` at ``gateFullThreshold`` and above.
     static func escalationGate(_ used: Double) -> Double {

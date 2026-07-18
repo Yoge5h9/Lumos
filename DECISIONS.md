@@ -5,6 +5,39 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — Data-source lock, stale redesign, capturable notch
+
+- **Data source: pure-local, status-line tee ONLY. Cross-surface sync via the network
+  rejected.** Research (two agents) + the user's own prior SwiftBar notch tool + Anthropic docs
+  all converge: the 5h/7d `rate_limits` window is delivered *only* through the Claude Code
+  status-line stdin payload. There is **no clean local source** that also covers Desktop-app /
+  claude.ai usage. The one cross-surface option — the undocumented `GET /api/oauth/usage`
+  endpoint (Bearer token from `~/.claude/.credentials.json`) — is **rejected as a default**: it
+  breaks all three core promises (local / no-network / no-keys), is **flaky** (three open CC
+  issues show it 429-ing for hours), and its token only refreshes while CC runs anyway. The
+  Claude Desktop local cache (`~/Library/Application Support/Claude/plan-usage-history.json`)
+  has `fh`/`sd` percentages but **no reset time and goes stale even while the app runs** — not
+  reliable. **Consequence:** Lumos is a *terminal-Claude-Code* tool; the Desktop/web gap is
+  handled by the honest Stale/Waiting UI, not a backdoor. A disclosed, off-by-default opt-in
+  toggle remains a *possible future*, never v1.
+- **Notch overlay is capturable: `sharingType = .readOnly`** (was `.none`). Rationale: users
+  must be able to screenshot/record the glow for demos, support, and sharing; `.none` silently
+  excluded it from all screen capture and read as "the notch isn't working." Trade-off accepted:
+  the glow now appears in screen shares (mild; it's an ambient indicator). The HUD panel keeps
+  its own setting.
+- **Stale redesign (supersedes the "Idle invisible" polish item above).** On going stale, Lumos
+  **keeps the last-known numbers** and renders the state color **desaturated + dimmed** (a muted
+  "greyed-out yellow", NOT neutral gray) and **static** — never blanks to "waiting". Constants:
+  **staleness threshold 300s (5 min)**, **desaturation 60%**, **dim 45%** (amber `#FFD60A` →
+  ~`rgb(188,167,77)`). Distinguished from a *fade* (which keeps full saturation + moves) by being
+  desaturated, motionless, and wearing an age label. **"waiting for Claude Code…" is reserved for
+  the no-data-ever case only** (never a stale value).
+- **Readout pill is compact (`NN% · <relative reset>`, e.g. `65% · 2h 14m`) ≈ notch width.** The
+  resting pill drops "used", the absolute IST time, and the weekly figure; full detail (absolute
+  reset time, `wk NN%`) moves to the click **HUD**. The stale **age label** (`stale · updated
+  Xm ago`) sits as a small, blended sub-label **below** the pill — never inline (inline widened it
+  past the notch). Rationale: "glanceable over detailed" + keep the pill at notch width.
+
 ## 2026-07-18 — Build + first on-hardware run
 
 - **`lumos setup` now launches the app + enables launch-at-login by default** (`--no-launch`

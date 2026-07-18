@@ -14,7 +14,8 @@ import LumosCore
 ///   flips to interactive only while a dismissible notification pill is shown.
 /// - **Z-order above the menu bar:** window level is one above `.mainMenu`.
 /// - **All Spaces + full-screen:** `.canJoinAllSpaces` + `.fullScreenAuxiliary`.
-/// - **Out of screen recordings:** `sharingType = .none`.
+/// - **Visible to screen capture:** `sharingType = .readOnly` (default) so the
+///   glow can be screenshotted / recorded for demos and support.
 final class NotchWindowController {
     private let dropHeight: CGFloat = 240
 
@@ -22,12 +23,17 @@ final class NotchWindowController {
     private var contentView: NSView!
     private let haloView = HaloView()
     private let readoutView = ReadoutView()
+    /// The blended "stale · updated Xm ago" line, centered just below the Readout
+    /// (never inline — that would widen the pill). Ambient, not a loud chip.
+    private let staleSubLabel = NSTextField(labelWithString: "")
     private lazy var glow = GlowController(view: haloView)
 
     private var geometry = NotchGeometry.detect()
     private var currentAccent: NSColor = .systemGray
     private var currentAggregate: CacheAggregate?
+    private var currentFreshness: Freshness = .waiting
     private var lastState: UsageState?
+    private var lastFreshness: Freshness?
     private var isVisibleSurface = false
 
     private var pills: [NotificationPillView] = []
@@ -78,7 +84,7 @@ final class NotchWindowController {
         panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        panel.sharingType = .none
+        panel.sharingType = .readOnly
 
         let content = NSView(frame: NSRect(origin: .zero, size: frame.size))
         content.wantsLayer = true
@@ -93,24 +99,48 @@ final class NotchWindowController {
         content.addSubview(readoutView)
         PillChrome.collapse(readoutView)
 
+        staleSubLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .regular)
+        staleSubLabel.textColor = NSColor.white.withAlphaComponent(0.38)
+        staleSubLabel.alignment = .center
+        staleSubLabel.isBezeled = false
+        staleSubLabel.drawsBackground = false
+        staleSubLabel.isEditable = false
+        staleSubLabel.isSelectable = false
+        staleSubLabel.isHidden = true
+        content.addSubview(staleSubLabel)
+
         glow.forceRest()
     }
 
     // MARK: - Public API
 
     /// Push the latest state + numbers. `state` colors the Halo and sets the
-    /// adaptive-glow's resting floor; `aggregate` feeds the Readout text.
-    func update(state: UsageState, aggregate: CacheAggregate) {
+    /// adaptive-glow's resting floor; `freshness` decides whether that hue reads
+    /// full and live or desaturated-dimmed-and-frozen; `aggregate` feeds the
+    /// Readout text.
+    func update(state: UsageState, freshness: Freshness, aggregate: CacheAggregate) {
         currentAggregate = aggregate
-        currentAccent = NSColor(hex: state.hex) ?? .systemGray
+        currentFreshness = freshness
 
-        // Animate the Halo/Bloom ONLY when the state actually changes; a coarse
-        // tick that re-reports the same state must not re-drive the glow (it stays
-        // a static CALayer at rest — DECISIONS.md "zero idle overhead").
-        if state != lastState {
-            haloView.setColor(currentAccent, animated: true)
-            glow.setState(state)
+        let isStale = freshness == .stale
+        let base = NSColor(hex: state.hex) ?? .systemGray
+        currentAccent = isStale ? base.staled() : base
+
+        // Animate the Halo/Bloom ONLY when the state or freshness actually
+        // changes; a coarse tick that re-reports the same reading must not
+        // re-drive the glow (it stays a static CALayer at rest — DECISIONS.md
+        // "zero idle overhead").
+        if state != lastState || freshness != lastFreshness {
+            let duration: CFTimeInterval = isStale ? StaleStyle.fadeDuration : 0.4
+            haloView.setColor(currentAccent, animated: true, duration: duration)
+            if isStale {
+                glow.freeze(at: StaleStyle.glowLevel, duration: StaleStyle.fadeDuration)
+            } else {
+                glow.unfreeze()
+                glow.setState(state)
+            }
             lastState = state
+            lastFreshness = freshness
         }
         if readoutVisible { refreshReadout() }
     }
@@ -199,14 +229,37 @@ final class NotchWindowController {
 
     private func hideReadout() {
         readoutVisible = false
+        staleSubLabel.isHidden = true
         PillChrome.bleed(readoutView, visible: false)
     }
 
     private func refreshReadout() {
-        let fields = currentAggregate.map { ReadoutFormatting.fields(for: $0) }
-            ?? ReadoutFormatting.Fields(used: "waiting for Claude Code…", reset: nil, weekly: nil, isIdle: true)
+        let fields = currentAggregate.map {
+            ReadoutFormatting.compact(for: $0, freshness: currentFreshness)
+        } ?? ReadoutFormatting.Fields(
+            primary: ReadoutFormatting.waitingPrimary, reset: nil, weekly: nil, isIdle: true
+        )
         let size = readoutView.update(fields: fields, accent: currentAccent)
         positionBelowNotch(readoutView, size: size, indexFromTop: 0)
+        updateStaleSubLabel(below: readoutView)
+    }
+
+    /// Place (or hide) the ambient stale age line centered just under the pill.
+    private func updateStaleSubLabel(below pill: NSView) {
+        let text = currentAggregate.flatMap {
+            ReadoutFormatting.staleSubLabel(for: $0, freshness: currentFreshness)
+        }
+        guard readoutVisible, let text else {
+            staleSubLabel.isHidden = true
+            return
+        }
+        staleSubLabel.stringValue = text
+        staleSubLabel.sizeToFit()
+        let gap: CGFloat = 5
+        let originX = (contentView.bounds.width - staleSubLabel.frame.width) / 2
+        let originY = pill.frame.minY - gap - staleSubLabel.frame.height
+        staleSubLabel.setFrameOrigin(NSPoint(x: originX, y: originY))
+        staleSubLabel.isHidden = false
     }
 
     // MARK: - Notification pills (rendered here; produced by LumosCore engine)
@@ -269,7 +322,8 @@ final class NotchWindowController {
     /// below the notch, stacked downward by index.
     private func positionBelowNotch(_ view: NSView, size: NSSize, indexFromTop: Int) {
         let gap: CGFloat = 10
-        let notchBottomY = contentView.bounds.maxY - geometry.renderNotchHeight - 4
+        let belowNotchGap: CGFloat = 10
+        let notchBottomY = contentView.bounds.maxY - geometry.renderNotchHeight - belowNotchGap
         var topY = notchBottomY
         for i in 0..<indexFromTop {
             let prior = (i < pills.count) ? pills[i].frame.height : size.height

@@ -1,0 +1,48 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- app-icon squircle tile background -->
+    <linearGradient id="tileGrad" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#1c1c20"/>
+      <stop offset="0.68" stop-color="#0a0a0c"/>
+    </linearGradient>
+    <radialGradient id="tileSheen" cx="50%" cy="-10%" r="120%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.09"/>
+      <stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- wand: walnut -> mahogany tapered shaft -->
+    <linearGradient id="woodGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2b1a0f"/>
+      <stop offset="0.5" stop-color="#5c3a20"/>
+      <stop offset="1" stop-color="#8c5c32"/>
+    </linearGradient>
+    <linearGradient id="handleGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1a0f07"/>
+      <stop offset="1" stop-color="#3a2414"/>
+    </linearGradient>
+
+    <!-- amber bloom -->
+    <radialGradient id="bloomGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFE9AE" stop-opacity="0.95"/>
+      <stop offset="45%" stop-color="#FFD60A" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#FFD60A" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="bloomBlur" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+
+  <!-- full-bleed squircle tile -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" ry="232" fill="url(#tileGrad)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="232" ry="232" fill="url(#tileSheen)"/>
+
+  <!-- wand glyph (authored in a 100x100 space, scaled + centered into the tile) -->
+  <g transform="translate(192,196) scale(6.4)">
+    <path d="M20.84 79.56 L27.16 84.44 L64.79 30.61 L63.21 29.39 Z" fill="url(#woodGrad)" stroke-linejoin="round"/>
+    <path d="M20.84 79.56 L27.16 84.44 L41.46 63.98 L36.94 60.5 Z" fill="url(#handleGrad)" stroke-linejoin="round"/>
+    <line x1="29.74" y1="69.85" x2="34.26" y2="73.35" stroke="rgba(0,0,0,.35)" stroke-width="1.1"/>
+    <line x1="25.5" y1="77" x2="60.5" y2="32.5" stroke="rgba(255,228,185,.26)" stroke-width="1.1" stroke-linecap="round"/>
+    <circle cx="66" cy="27" r="21" fill="url(#bloomGrad)" filter="url(#bloomBlur)"/>
+    <circle cx="66" cy="27" r="5" fill="#FFF3D2"/>
+  </g>
+</svg>

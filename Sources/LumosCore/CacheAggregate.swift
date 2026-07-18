@@ -27,11 +27,45 @@ public struct CacheAggregate: Equatable {
     public let isStale: Bool
 }
 
+/// How much to trust what's on screen. Drives the glow/readout/LED treatment:
+/// full colour, greyed-and-frozen, clock-derived refill, or the no-data prompt.
+public enum Freshness: Equatable {
+    /// Data younger than the staleness threshold — full colour, live numbers.
+    case live
+    /// Data older than the threshold but present — desaturated, dimmed, frozen
+    /// at last-known numbers. Resting, not broken.
+    case stale
+    /// The reset time has passed, so the window has topped up even without a
+    /// fresh ping — derived from the clock, rendered calm at ~0% used.
+    case refilled
+    /// No snapshot in the cache at all — the "waiting for Claude Code…" prompt.
+    case waiting
+}
+
+public extension CacheAggregate {
+    /// The freshness tier for the latest snapshot. `refilled` takes precedence
+    /// over age: once the reset instant is behind us we know it's fresh again,
+    /// however long since the last tick.
+    func freshness(
+        now: Date = Date(),
+        stalenessThreshold: TimeInterval = CacheAggregator.defaultStalenessThreshold
+    ) -> Freshness {
+        guard let snapshot = latestSnapshot else { return .waiting }
+        let nowEpoch = now.timeIntervalSince1970
+        if let resetsAt = snapshot.fiveHour?.resetsAt, nowEpoch >= Double(resetsAt) {
+            return .refilled
+        }
+        return nowEpoch - Double(snapshot.updatedAt) <= stalenessThreshold ? .live : .stale
+    }
+}
+
 public enum CacheAggregator {
     /// A session is considered stale if its last update is older than this,
     /// by default — the status line goes quiet the moment Claude Code is idle
-    /// or closed, so this is the freshness bar for "currently live".
-    public static let defaultStalenessThreshold: TimeInterval = 90
+    /// or closed, so this is the freshness bar for "currently live". Stale data
+    /// isn't wrong data (used-% only rises on sends, reset is absolute), so the
+    /// bar is generous: keep showing the last-known numbers, just visibly aged.
+    public static let defaultStalenessThreshold: TimeInterval = 300
 
     public static func aggregate(
         cache: LumosCache,

@@ -132,9 +132,11 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         let now = Date()
         let cache = CacheReader.loadTolerant(from: LumosPaths.cacheFile())
         let aggregate = CacheAggregator.aggregate(cache: cache, now: now)
+        let freshness = aggregate.freshness(now: now)
         let burn = recordBurnSample(from: aggregate)
 
-        paint(state: currentState(aggregate: aggregate, burn: burn), aggregate: aggregate)
+        paint(state: currentState(aggregate: aggregate, freshness: freshness, burn: burn, now: now),
+              freshness: freshness, aggregate: aggregate, now: now)
 
         let includeTiming: Bool
         switch source {
@@ -148,21 +150,42 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     /// Re-render LED + Halo from the current cache without recording a burn sample
     /// or polling notifications — for menu toggles that change appearance only.
     private func repaintFromToggles() {
+        let now = Date()
         let cache = CacheReader.loadTolerant(from: LumosPaths.cacheFile())
-        let aggregate = CacheAggregator.aggregate(cache: cache)
-        paint(state: currentState(aggregate: aggregate, burn: burnSampler.burnRatePerSecond()),
-              aggregate: aggregate)
+        let aggregate = CacheAggregator.aggregate(cache: cache, now: now)
+        let freshness = aggregate.freshness(now: now)
+        paint(state: currentState(aggregate: aggregate, freshness: freshness,
+                                  burn: burnSampler.burnRatePerSecond(), now: now),
+              freshness: freshness, aggregate: aggregate, now: now)
     }
 
-    private func currentState(aggregate: CacheAggregate, burn: Double?) -> UsageState {
-        settings.masterOff
-            ? .idle
-            : ColorModel.state(aggregate: aggregate, burnRatePerSecond: burn)
+    /// The base hue for the current reading. Stale freezes onto the last-known
+    /// hue (the UI greys/dims it); Refilled reads calm from the clock; Waiting
+    /// and master-off are Idle.
+    private func currentState(aggregate: CacheAggregate, freshness: Freshness,
+                              burn: Double?, now: Date) -> UsageState {
+        guard !settings.masterOff else { return .idle }
+        switch freshness {
+        case .waiting: return .idle
+        case .refilled: return .calm
+        case .stale: return ColorModel.lastKnownState(aggregate: aggregate, now: now)
+        case .live: return ColorModel.state(aggregate: aggregate, now: now, burnRatePerSecond: burn)
+        }
     }
 
-    private func paint(state: UsageState, aggregate: CacheAggregate) {
-        renderLED(state: state, aggregate: aggregate)
-        notchController.update(state: state, aggregate: aggregate)
+    private func paint(state: UsageState, freshness: Freshness, aggregate: CacheAggregate, now: Date) {
+        // Nothing to "rest on" reads as no-signal, not Stale: master-off, or a
+        // stale snapshot with no 5-hour numbers to freeze (e.g. a free plan).
+        let effectiveFreshness: Freshness
+        if settings.masterOff {
+            effectiveFreshness = .waiting
+        } else if freshness == .stale, state == .idle {
+            effectiveFreshness = .waiting
+        } else {
+            effectiveFreshness = freshness
+        }
+        renderLED(state: state, freshness: effectiveFreshness, aggregate: aggregate, now: now)
+        notchController.update(state: state, freshness: effectiveFreshness, aggregate: aggregate)
     }
 
     /// The LED image + optional "% text" the status item shows. Skipped entirely
@@ -170,26 +193,33 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     /// state never repaints the menu bar.
     private struct RenderSignature: Equatable {
         let state: UsageState
+        let freshness: Freshness
         let colored: Bool
         let title: String
     }
 
-    private func renderLED(state: UsageState, aggregate: CacheAggregate) {
+    private func renderLED(state: UsageState, freshness: Freshness, aggregate: CacheAggregate, now: Date) {
         let showColor = settings.ledColorEnabled && !settings.masterOff
+        let isStale = freshness == .stale
 
         let title: String
-        if settings.showPercentEnabled, !aggregate.isStale,
-           let used = aggregate.latestSnapshot?.fiveHour?.usedPercentage {
+        let resolved = ReadoutFormatting.resolved(for: aggregate, freshness: freshness)
+        if settings.showPercentEnabled, let used = resolved.usedPercentage {
             title = " \(Int(used.rounded()))%"
         } else {
             title = ""
         }
 
-        let signature = RenderSignature(state: state, colored: showColor, title: title)
+        let signature = RenderSignature(state: state, freshness: freshness, colored: showColor, title: title)
         guard signature != lastRender else { return }
         lastRender = signature
 
-        statusItem.button?.image = StatusItemLED.image(color: state.color, monochrome: !showColor)
+        let ledColor = isStale ? state.color.staled() : state.color
+        statusItem.button?.image = StatusItemLED.image(
+            color: ledColor,
+            monochrome: !showColor,
+            opacity: isStale ? StaleStyle.glowLevel : 1
+        )
         statusItem.button?.title = title
     }
 
@@ -505,15 +535,18 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     /// Refresh the on-demand text (header + weekly) and the update row right before
     /// the root menu opens.
     private func refreshHeaderAndUpdateRow(in menu: NSMenu) {
-        let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile())
+        let now = Date()
+        let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile(), now: now)
+        let freshness = aggregate.freshness(now: now)
 
-        if aggregate.isStale {
+        if freshness == .waiting {
             statusHeaderItem.title = "Waiting for Claude Code…"
             weeklyItem.isHidden = true
         } else {
-            let five = aggregate.latestSnapshot?.fiveHour
-            let used = five?.usedPercentage.map { "\(Int($0.rounded()))% used" } ?? "usage unknown"
-            statusHeaderItem.title = used + resetSuffix(five?.resetsAt)
+            let resolved = ReadoutFormatting.resolved(for: aggregate, freshness: freshness)
+            let usedText = resolved.usedPercentage.map { "\(Int($0.rounded()))% used" } ?? "usage unknown"
+            let staleSuffix = freshness == .stale ? " (stale)" : ""
+            statusHeaderItem.title = usedText + resetSuffix(resolved.resetEpoch) + staleSuffix
 
             if let weekly = aggregate.latestSnapshot?.sevenDay?.usedPercentage {
                 weeklyItem.title = "Weekly: \(Int(weekly.rounded()))%"
@@ -586,13 +619,13 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     private func handleLEDHover() {
         guard !menuIsOpen, let anchor = ledScreenRect() else { hud.hide(); return }
         if anchor.contains(NSEvent.mouseLocation) {
-            let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile())
+            let now = Date()
+            let aggregate = CacheAggregator.loadAndAggregate(cacheFile: LumosPaths.cacheFile(), now: now)
+            let freshness = aggregate.freshness(now: now)
             let burn = burnSampler.burnRatePerSecond()
-            let state: UsageState = settings.masterOff
-                ? .idle
-                : ColorModel.state(aggregate: aggregate, burnRatePerSecond: burn)
-            let fields = ReadoutFormatting.fields(for: aggregate)
-            let accent = state.color
+            let state = currentState(aggregate: aggregate, freshness: freshness, burn: burn, now: now)
+            let fields = ReadoutFormatting.full(for: aggregate, freshness: freshness, now: now)
+            let accent = freshness == .stale ? state.color.staled() : state.color
             hud.show(below: anchor, fields: fields, accent: accent)
         } else if hud.isVisible {
             hud.hide()

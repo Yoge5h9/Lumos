@@ -109,7 +109,7 @@ public enum SetupService {
         let targetInvocation = wrapperInvocation(wrapperScript: wrapperURL)
 
         if let existingCommand, existingCommand == targetInvocation {
-            return "Lumos is already set up — statusLine already wraps \(wrapperURL.path)."
+            return "Lumos is already set up. Your glow updates as you use Claude Code in the terminal."
         }
 
         var backupPath: String?
@@ -160,7 +160,10 @@ public enum SetupService {
         }
 
         let backupNote = backupPath.map { " (backup: \($0))" } ?? " (no prior settings file existed)"
-        return "Lumos set up. Status line wrapped at \(wrapperURL.path)\(backupNote)."
+        return """
+        Lumos set up. Status line wrapped at \(wrapperURL.path)\(backupNote).
+        Your glow updates as you use Claude Code in the terminal.
+        """
     }
 
     /// Restores the original settings file byte-for-byte from its backup (or

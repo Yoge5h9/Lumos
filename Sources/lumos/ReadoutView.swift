@@ -70,11 +70,11 @@ final class ReadoutView: NSView {
         let faint = NSColor.white.withAlphaComponent(0.4)
 
         if fields.isIdle {
-            append(fields.used, NSColor.white.withAlphaComponent(0.7))
+            append(fields.primary, NSColor.white.withAlphaComponent(0.7))
             return result
         }
 
-        append(fields.used, accent, true)
+        append(fields.primary, accent, true)
         if let reset = fields.reset {
             append("   ·   ", faint)
             append(reset, NSColor.white.withAlphaComponent(0.85), true)

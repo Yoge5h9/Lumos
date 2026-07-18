@@ -4,7 +4,24 @@
 > meaningful chunk of work (see the "Living docs" rule in [`CLAUDE.md`](./CLAUDE.md)).
 > Companion to [`PLAN.md`](./PLAN.md) (the plan) and [`DECISIONS.md`](./DECISIONS.md) (the locks).
 >
-> **Last updated:** 2026-07-18 (first on-hardware run + crash fix)
+> **Last updated:** 2026-07-18 (stale redesign + onboarding/pill polish landed; Homebrew prep in progress)
+
+## 2026-07-18 (later) — Stale redesign, compact pill & onboarding landed
+
+Ported to Swift + build-green (on hardware), superseding the earlier on-hardware findings:
+- **Stale = desaturated-dimmed, static, frozen numbers** (5-min threshold; desat 60% / dim 45% via
+  `StaleStyle`) with a blended `stale · updated Xm ago` sub-label **below** the Readout — replaces the
+  old invisible-gray Idle. "waiting for Claude Code…" is now reserved for the no-data-ever case.
+- **Compact Readout pill** `NN% · <relative> to reset` (e.g. `85% · 9m to reset`), ~notch width, 10px
+  below the notch; full detail (absolute time, weekly) moved to the click HUD.
+- **Onboarding revamped** — word-wrap clipping fixed; Harry-Potter-flavored copy ("Lumos lights up the
+  dark…"); green dot removed (a woody wand-glow mark is in design); reassurance-tail copy trimmed; a
+  high-level "updates as you use Claude Code in the terminal" note added (also in `lumos setup` output).
+- **Notch is screen-capturable** (`sharingType = .readOnly`).
+- **Terminal-Claude-Code-only data** confirmed (status line doesn't fire in Desktop/web/IDE) — surfaced
+  honestly via the stale state + high-level copy; cross-surface network sync rejected (see DECISIONS).
+- **Homebrew release prep in progress** (Info.plist, CLT-only formula to drop the Xcode dep, secret
+  scan clean); publish gated on user approval, after the icon + design-HTML cleanup land.
 
 ## Status at a glance
 
@@ -58,8 +75,18 @@
 - ⚠️ **Findings to fix (v1 polish):**
   1. **Idle is invisible** — Idle Halo is dim gray on a black notch → reads as "notch not
      working." Give Idle a perceptible treatment (faint but visible glow, and/or clearer LED).
-  2. **`setup` mid-session doesn't flow data until a NEW Claude Code session** — the wrapper only
-     fires in a fresh session. `setup` should tell the user to start a new session / restart.
+  2. **`setup` mid-session** — data begins on the **next Claude Code interaction** (official docs: the
+     status line **hot-reloads**, it is *not* session-start-only — earlier claim corrected). The
+     on-hardware "no data until a new session" is most likely the documented settings-strip bug
+     (anthropics/claude-code#62486 — CC periodically rewrites `settings.json` and drops `statusLine`)
+     and/or the workspace **trust gate** (status line stays blank until the folder's trust dialog is
+     accepted). Remedy: `setup` closing line — "your glow starts on your next Claude Code interaction;
+     if it stays dim, start a fresh session and make sure this folder is trusted." **Plus a self-heal:**
+     Lumos periodically re-verifies its `statusLine` entry survived and re-wraps non-destructively if
+     CC stripped it (consistent with "wrap, never replace").
+  4. **Only the terminal CLI runs the status line** — VS Code / JetBrains / Desktop-app *Code tab* do
+     NOT execute `statusLine` (confirmed gaps; Desktop Code has its own usage ring). Lumos's audience is
+     terminal Claude Code users — document as a known limitation, don't silently show nothing.
   3. **Notch Halo not yet confirmed visible in a live (non-Idle) color** on hardware — needs a
      look with fresh non-stale data (was only ever seen stale/Idle).
 

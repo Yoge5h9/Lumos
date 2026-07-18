@@ -24,6 +24,10 @@ final class GlowController {
     private var holdWorkItem: DispatchWorkItem?
     private var isBright = false
 
+    /// Stale is dead-still: while frozen the glow holds a fixed dim level and
+    /// ignores wake/settle, so nothing breathes until fresh data arrives.
+    private var isFrozen = false
+
     init(view: HaloView) {
         self.view = view
     }
@@ -44,8 +48,23 @@ final class GlowController {
         }
     }
 
+    /// Hold a fixed, dimmed level with no motion (Stale). Eases in over
+    /// `duration`, then stays put — `wake`/`settle` are inert until `unfreeze`.
+    func freeze(at level: CGFloat, duration: CFTimeInterval) {
+        holdWorkItem?.cancel()
+        isBright = false
+        isFrozen = true
+        view?.setGlowLevel(level, duration: duration)
+    }
+
+    /// Leave the frozen Stale hold so the glow can respond to state/hover again.
+    func unfreeze() {
+        isFrozen = false
+    }
+
     /// Bloom to peak, hold, then ease back to the resting floor.
     func wake() {
+        guard !isFrozen else { return }
         holdWorkItem?.cancel()
         isBright = true
         view?.setGlowLevel(peak, duration: wakeDuration)

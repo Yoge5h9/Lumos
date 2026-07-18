@@ -2,10 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- PLACEHOLDER: reverse-DNS bundle id. Reserve a real domain/handle before first release
-	     (e.g. com.<github-user>.lumos) and update here + in the Homebrew formula/assemble script. -->
 	<key>CFBundleIdentifier</key>
-	<string>com.lumos.app</string>
+	<string>com.yoge5h9.lumos</string>
 
 	<key>CFBundleName</key>
 	<string>lumos</string>
@@ -15,6 +13,12 @@
 
 	<key>CFBundleExecutable</key>
 	<string>lumos</string>
+
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>

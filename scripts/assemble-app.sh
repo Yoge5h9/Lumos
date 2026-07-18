@@ -88,10 +88,13 @@ else
   echo "    warning: ${TIPS_JSON_SRC} not found; app will fall back to embedded default tips"
 fi
 
-# Room for future icon/asset copies (AppIcon.icns, etc.) — none exist yet.
-# if [[ -f "${REPO_ROOT}/Resources/AppIcon.icns" ]]; then
-#   cp "${REPO_ROOT}/Resources/AppIcon.icns" "${RESOURCES_DIR}/AppIcon.icns"
-# fi
+echo "==> Copying AppIcon.icns..."
+APPICON_SRC="${REPO_ROOT}/Resources/AppIcon.icns"
+if [[ -f "${APPICON_SRC}" ]]; then
+  cp "${APPICON_SRC}" "${RESOURCES_DIR}/AppIcon.icns"
+else
+  echo "    warning: ${APPICON_SRC} not found; bundle will use the generic app icon"
+fi
 
 # --- 3. ad-hoc sign --------------------------------------------------------
 # Ad-hoc signing (`-s -`) only: no Apple Developer account, no notarization.

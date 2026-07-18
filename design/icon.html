@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumos — icon &amp; mark concepts</title>
+<style>
+  :root{
+    --calm:#30d158; --watch:#ffd60a; --alert:#ff453a; --idle:#8c8c8c;
+    --bg:#050506; --line:#1c1c22; --dim:#8c8c92; --panel:#0d0d10; --txt:#e9e9ea;
+    --hue:0deg; --glow-k:1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+  header.brandbar{display:flex;align-items:center;padding:16px 24px;
+      background:linear-gradient(#101014,#0a0a0d);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:.2px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--watch);
+      box-shadow:0 0 9px var(--watch)}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px;margin-left:2px;letter-spacing:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+      color:#6c6c72;margin:26px auto 8px;max-width:1040px;padding:0 20px}
+  .sub{color:var(--dim);margin:0 auto 22px;font-size:13px;line-height:1.6;max-width:1040px;padding:0 20px}
+
+  .panel{max-width:1040px;margin:0 auto;padding:0 20px 70px}
+
+  /* live controls */
+  .controls{display:flex;flex-wrap:wrap;gap:26px;align-items:center;
+      background:var(--panel);border:1px solid var(--line);border-radius:14px;
+      padding:16px 20px;margin-bottom:28px}
+  .ctrl{display:flex;align-items:center;gap:10px}
+  .ctrl .lbl{color:#a1a1a8;font-size:12px;width:92px}
+  input[type=range]{width:180px;accent-color:var(--watch)}
+  .ctrl .val{color:#c7c7cc;font-size:12px;font-variant-numeric:tabular-nums;width:44px}
+  .ctrl-reset{margin-left:auto;background:#1c1c20;color:var(--txt);border:1px solid #2c2c31;
+      border-radius:9px;padding:7px 14px;cursor:pointer;font:inherit;font-size:12.5px}
+  .ctrl-reset:hover{background:#26262b;border-color:#37373d}
+
+  /* concept grid */
+  .concept-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;
+      position:relative;display:flex;flex-direction:column}
+  .card.reco{border-color:rgba(255,214,10,.55);box-shadow:0 0 0 1px rgba(255,214,10,.16) inset}
+  .card .badge{position:absolute;top:14px;right:14px;font-size:10.5px;font-weight:700;
+      letter-spacing:.4px;text-transform:uppercase;color:#0b0b0c;background:var(--watch);
+      padding:3px 8px;border-radius:20px}
+  .card h3{margin:0 0 6px;font-size:15px}
+  .card p.blurb{margin:0 0 18px;color:var(--dim);font-size:12.5px;line-height:1.55;min-height:38px}
+
+  .renders{display:flex;align-items:flex-end;gap:24px;flex-wrap:wrap}
+  .render{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .capsize{font-size:11px;color:#6c6c72}
+
+  /* macOS Big-Sur-ish squircle tile */
+  .tile{width:132px;height:132px;border-radius:30px;position:relative;overflow:hidden;
+      display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(160deg,#1c1c20 0%,#0a0a0c 68%);
+      box-shadow:inset 0 1px 1px rgba(255,255,255,.07),
+                 inset 0 -14px 26px rgba(0,0,0,.55),
+                 0 18px 34px -18px rgba(0,0,0,.65)}
+  .tile::before{content:"";position:absolute;inset:0;
+      background:radial-gradient(120% 90% at 50% -10%,rgba(255,255,255,.09),transparent 60%)}
+  .tile.sz28{width:28px;height:28px;border-radius:6.3px;
+      box-shadow:inset 0 .5px .5px rgba(255,255,255,.08),0 3px 6px -3px rgba(0,0,0,.6)}
+  .tile.sz16{width:16px;height:16px;border-radius:3.6px;box-shadow:none}
+  .tile svg{position:relative;z-index:1}
+
+  /* colour + intensity controls apply to these classes inside every icon svg */
+  .glow-hue{filter:hue-rotate(var(--hue))}
+  .bloom{transform-box:fill-box;transform-origin:center;
+      transform:scale(var(--glow-k));opacity:calc(.9 * var(--glow-k));
+      transition:transform .12s linear,opacity .12s linear}
+
+  /* recommendation section */
+  .reco-panel{margin-top:34px;background:linear-gradient(160deg,#14140f,#0d0d0c 70%);
+      border:1px solid rgba(255,214,10,.3);border-radius:18px;padding:26px 28px}
+  .reco-panel h2{margin:0 0 8px;font-size:16px;display:flex;align-items:center;gap:10px}
+  .reco-panel h2 .pill{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+      color:#0b0b0c;background:var(--watch);padding:3px 9px;border-radius:20px}
+  .reco-panel p{margin:0 0 10px;color:#c7c7cc;font-size:13px;line-height:1.65;max-width:760px}
+  .reco-panel p b{color:#fff}
+
+  .compare{display:flex;gap:36px;align-items:center;margin-top:20px;flex-wrap:wrap}
+  .compare .side{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .compare .arrow{color:#6c6c72;font-size:20px}
+  .mock-header{display:flex;align-items:center;gap:9px;background:#111114;border:1px solid var(--line);
+      border-radius:11px;padding:10px 16px;font-size:13px;font-weight:600;color:#e9e9ea;min-width:220px}
+  .mock-header .old-dot{width:11px;height:11px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 9px var(--calm)}
+  .compare .capsize{color:#8c8c92}
+</style>
+</head>
+<body>
+  <header class="brandbar">
+    <div class="brand"><span class="dot"></span>Lumos <small>icon &amp; mark concepts — wand-casting-light motif</small></div>
+  </header>
+
+  <div class="eyebrow">Icon / mark</div>
+  <p class="sub">Five directions for the Lumos mark — the wand-lighting spell, rendered as premium,
+    minimal SVG. Each is shown as a macOS-style app-icon tile at hero size, then at the actual 28px
+    and 16px it will run at in the menu bar and onboarding header, so nothing here turns to mush at
+    a glance. Use the sliders to feel glow intensity and hue across every concept at once.</p>
+
+  <div class="panel">
+    <div class="controls">
+      <div class="ctrl">
+        <span class="lbl">Glow intensity</span>
+        <input type="range" id="glowSlider" min="0.5" max="1.9" step="0.05" value="1">
+        <span class="val" id="glowVal">1.00</span>
+      </div>
+      <div class="ctrl">
+        <span class="lbl">Hue</span>
+        <input type="range" id="hueSlider" min="-50" max="90" step="1" value="0">
+        <span class="val" id="hueVal">0°</span>
+      </div>
+      <button class="ctrl-reset" id="resetCtrl">Reset</button>
+    </div>
+
+    <div class="concept-grid" id="grid"></div>
+
+    <div class="reco-panel">
+      <h2><span class="pill">Recommendation</span> Open Halo (Concept 5)</h2>
+      <p>The <b>Open Halo</b> is the only mark that borrows its geometry directly from the product
+        rather than from wand iconography in general — its ring is left open at the top exactly the
+        way the real Halo is (<code>border-top:none</code> tracing only the notch's sides + bottom,
+        per <code>showcase.html</code>). The wand casts light up through that same gap. It reads
+        clean at 16px because it's two strokes and a glow — no fine detail to lose — and it ties
+        <b>Halo</b> and <b>Bloom</b> together in one glyph instead of picking just one.</p>
+      <p><b>Wand + Halo Ring</b> (Concept 2) is the strong runner-up if a fully-closed, more classic
+        "halo" reads better in user testing — it's more universally legible as "a ring" at a glance,
+        just less literally *our* Halo shape.</p>
+      <div class="compare">
+        <div class="side">
+          <div class="mock-header"><span class="old-dot"></span>Set up Lumos</div>
+          <span class="capsize">today — plain green dot</span>
+        </div>
+        <span class="arrow">→</span>
+        <div class="side">
+          <div class="mock-header"><span id="recoMarkSlot" style="display:inline-flex"></span>Set up Lumos</div>
+          <span class="capsize">proposed — Open Halo mark, 16px</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+function wandGrad(uid){
+  return '<linearGradient id="wandGrad-'+uid+'" x1="0" y1="1" x2="1" y2="0">'
+    + '<stop offset="0" stop-color="#54545c"/>'
+    + '<stop offset="1" stop-color="#9a9aa3"/>'
+    + '</linearGradient>';
+}
+function bloomGrad(uid){
+  return '<radialGradient id="bloomGrad-'+uid+'" cx="50%" cy="50%" r="50%">'
+    + '<stop offset="0%" stop-color="#FFE9AE" stop-opacity="0.95"/>'
+    + '<stop offset="45%" stop-color="#FFD60A" stop-opacity="0.55"/>'
+    + '<stop offset="100%" stop-color="#FFD60A" stop-opacity="0"/>'
+    + '</radialGradient>';
+}
+function ringGrad(uid){
+  return '<linearGradient id="ringGrad-'+uid+'" x1="0" y1="0" x2="1" y2="1">'
+    + '<stop offset="0" stop-color="#FFEDB0"/>'
+    + '<stop offset="1" stop-color="#FFD60A"/>'
+    + '</linearGradient>';
+}
+function blurDef(uid,std){
+  return '<filter id="blur-'+uid+'" x="-120%" y="-120%" width="340%" height="340%">'
+    + '<feGaussianBlur stdDeviation="'+std+'"/>'
+    + '</filter>';
+}
+function wandLine(uid,x1,y1,x2,y2){
+  return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="url(#wandGrad-'+uid+')" stroke-width="6" stroke-linecap="round"/>'
+    + '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="rgba(255,255,255,.32)" stroke-width="1.3" stroke-linecap="round" transform="translate(-1,-1)"/>';
+}
+
+var CONCEPTS = [
+  {
+    key:'wand-bloom', title:'Wand Tip + Bloom',
+    blurb:'A tapered wooden wand — walnut shaft, darker grip — casting a warm bloom from its tip; the literal shape of our own “Bloom.”',
+    build:function(uid){
+      return '<defs>'
+        + '<linearGradient id="woodGrad-'+uid+'" x1="0" y1="1" x2="1" y2="0">'
+        +   '<stop offset="0" stop-color="#2b1a0f"/>'
+        +   '<stop offset="0.5" stop-color="#5c3a20"/>'
+        +   '<stop offset="1" stop-color="#8c5c32"/>'
+        + '</linearGradient>'
+        + '<linearGradient id="handleGrad-'+uid+'" x1="0" y1="1" x2="1" y2="0">'
+        +   '<stop offset="0" stop-color="#1a0f07"/>'
+        +   '<stop offset="1" stop-color="#3a2414"/>'
+        + '</linearGradient>'
+        + bloomGrad(uid)+blurDef(uid,4)+'</defs>'
+        + '<g>'
+        // tapered wooden shaft (thick handle → thin tip)
+        + '<path d="M20.84 79.56 L27.16 84.44 L64.79 30.61 L63.21 29.39 Z" fill="url(#woodGrad-'+uid+')" stroke-linejoin="round"/>'
+        // darker, distinct grip at the base
+        + '<path d="M20.84 79.56 L27.16 84.44 L41.46 63.98 L36.94 60.5 Z" fill="url(#handleGrad-'+uid+')" stroke-linejoin="round"/>'
+        // faint grip band
+        + '<line x1="29.74" y1="69.85" x2="34.26" y2="73.35" stroke="rgba(0,0,0,.35)" stroke-width="1.1"/>'
+        // subtle wood sheen / grain highlight
+        + '<line x1="25.5" y1="77" x2="60.5" y2="32.5" stroke="rgba(255,228,185,.26)" stroke-width="1.1" stroke-linecap="round"/>'
+        + '<g class="glow-hue">'
+        + '<circle class="bloom" cx="66" cy="27" r="21" fill="url(#bloomGrad-'+uid+')" filter="url(#blur-'+uid+')"/>'
+        + '<circle cx="66" cy="27" r="5" fill="#FFF3D2"/>'
+        + '</g></g>';
+    }
+  },
+  {
+    key:'wand-halo', title:'Wand + Halo Ring',
+    blurb:'The tip sits inside a glowing ring it seems to conjure — the most direct nod to our notch “Halo.”',
+    build:function(uid){
+      return '<defs>'+wandGrad(uid)+ringGrad(uid)+blurDef(uid,4.5)+'</defs>'
+        + '<g>'
+        + wandLine(uid,16,88,46,50)
+        + '<g class="glow-hue">'
+        + '<circle class="bloom" cx="58" cy="40" r="26" fill="none" stroke="url(#ringGrad-'+uid+')" stroke-width="9" filter="url(#blur-'+uid+')" opacity="0.85"/>'
+        + '<circle cx="58" cy="40" r="20" fill="none" stroke="url(#ringGrad-'+uid+')" stroke-width="4"/>'
+        + '<circle cx="46" cy="50" r="4.5" fill="#FFF3D2"/>'
+        + '</g></g>';
+    }
+  },
+  {
+    key:'spark', title:'Spark of Light',
+    blurb:'A minimal four-point spark with a soft glow — almost no wand at all, just the light it casts.',
+    build:function(uid){
+      return '<defs>'+wandGrad(uid)+bloomGrad(uid)+blurDef(uid,5)+'</defs>'
+        + '<g>'
+        + '<line x1="20" y1="86" x2="34" y2="72" stroke="url(#wandGrad-'+uid+')" stroke-width="5.5" stroke-linecap="round" opacity="0.85"/>'
+        + '<g class="glow-hue">'
+        + '<circle class="bloom" cx="58" cy="42" r="24" fill="url(#bloomGrad-'+uid+')" filter="url(#blur-'+uid+')"/>'
+        + '<path d="M58 20 L63 38 L81 42 L63 46 L58 64 L53 46 L35 42 L53 38 Z" fill="#FFE9AE"/>'
+        + '</g></g>';
+    }
+  },
+  {
+    key:'lumos-l', title:'Lumos “L”',
+    blurb:'A letterform that is also a wand — the vertical stroke tapers up into a glowing tip.',
+    build:function(uid){
+      return '<defs>'+wandGrad(uid)+bloomGrad(uid)+blurDef(uid,4)+'</defs>'
+        + '<g>'
+        + '<rect x="38" y="22" width="12" height="60" rx="6" fill="url(#wandGrad-'+uid+')"/>'
+        + '<rect x="38" y="70" width="36" height="12" rx="6" fill="url(#wandGrad-'+uid+')"/>'
+        + '<g class="glow-hue">'
+        + '<circle class="bloom" cx="44" cy="23" r="17" fill="url(#bloomGrad-'+uid+')" filter="url(#blur-'+uid+')"/>'
+        + '<circle cx="44" cy="23" r="5.2" fill="#FFF3D2"/>'
+        + '</g></g>';
+    }
+  },
+  {
+    key:'open-halo', title:'Open Halo', reco:true,
+    blurb:'An arc left open at the top — exactly how the real Halo traces the notch — with the wand casting light through the gap.',
+    build:function(uid){
+      return '<defs>'+wandGrad(uid)+ringGrad(uid)+bloomGrad(uid)+blurDef(uid,4.5)+'</defs>'
+        + '<g>'
+        + '<g class="glow-hue">'
+        + '<path class="bloom" d="M 44 30 A 27 27 0 1 0 68 30" fill="none" stroke="url(#ringGrad-'+uid+')" stroke-width="10" stroke-linecap="round" filter="url(#blur-'+uid+')" opacity="0.8" transform="rotate(-75 56 54)"/>'
+        + '<path d="M 44 30 A 27 27 0 1 0 68 30" fill="none" stroke="url(#ringGrad-'+uid+')" stroke-width="4.5" stroke-linecap="round" transform="rotate(-75 56 54)"/>'
+        + '</g>'
+        + wandLine(uid,18,90,58,18)
+        + '<g class="glow-hue">'
+        + '<circle class="bloom" cx="58" cy="18" r="11" fill="url(#bloomGrad-'+uid+')" filter="url(#blur-'+uid+')"/>'
+        + '<circle cx="58" cy="18" r="4" fill="#FFF3D2"/>'
+        + '</g></g>';
+    }
+  }
+];
+
+function svgWrap(uid,w,h,inner){
+  return '<svg class="icon-art" viewBox="0 0 100 100" width="'+w+'" height="'+h+'" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'+inner+'</svg>';
+}
+
+function renderCard(c){
+  var heroUid=c.key+'-hero', midUid=c.key+'-28', tinyUid=c.key+'-16';
+  return '<div class="card'+(c.reco?' reco':'')+'">'
+    + (c.reco?'<span class="badge">Recommended</span>':'')
+    + '<h3>'+c.title+'</h3>'
+    + '<p class="blurb">'+c.blurb+'</p>'
+    + '<div class="renders">'
+    +   '<div class="render"><div class="tile">'+svgWrap(heroUid,82,82,c.build(heroUid))+'</div><span class="capsize">Hero (app icon)</span></div>'
+    +   '<div class="render"><div class="tile sz28">'+svgWrap(midUid,17,17,c.build(midUid))+'</div><span class="capsize">28px</span></div>'
+    +   '<div class="render"><div class="tile sz16">'+svgWrap(tinyUid,10,10,c.build(tinyUid))+'</div><span class="capsize">16px</span></div>'
+    + '</div></div>';
+}
+
+document.getElementById('grid').innerHTML = CONCEPTS.map(renderCard).join('');
+
+var openHalo = CONCEPTS.filter(function(c){return c.reco;})[0];
+document.getElementById('recoMarkSlot').innerHTML = svgWrap('reco-mock',16,16,openHalo.build('reco-mock'));
+
+var glowSlider=document.getElementById('glowSlider'), glowVal=document.getElementById('glowVal'),
+    hueSlider=document.getElementById('hueSlider'), hueVal=document.getElementById('hueVal'),
+    root=document.documentElement;
+
+function applyGlow(){
+  var v=parseFloat(glowSlider.value);
+  root.style.setProperty('--glow-k', v);
+  glowVal.textContent=v.toFixed(2);
+}
+function applyHue(){
+  var v=parseFloat(hueSlider.value);
+  root.style.setProperty('--hue', v+'deg');
+  hueVal.textContent=v+'°';
+}
+glowSlider.addEventListener('input', applyGlow);
+hueSlider.addEventListener('input', applyHue);
+document.getElementById('resetCtrl').addEventListener('click', function(){
+  glowSlider.value=1; hueSlider.value=0; applyGlow(); applyHue();
+});
+applyGlow(); applyHue();
+</script>
+</body>
+</html>
