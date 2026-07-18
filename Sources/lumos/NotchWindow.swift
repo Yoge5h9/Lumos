@@ -32,6 +32,7 @@ final class NotchWindowController {
     private var currentAccent: NSColor = .systemGray
     private var currentAggregate: CacheAggregate?
     private var currentFreshness: Freshness = .waiting
+    private var currentState: UsageState = .idle
     private var lastState: UsageState?
     private var lastFreshness: Freshness?
     private var isVisibleSurface = false
@@ -120,29 +121,33 @@ final class NotchWindowController {
     /// Readout text.
     func update(state: UsageState, freshness: Freshness, aggregate: CacheAggregate) {
         currentAggregate = aggregate
-        currentFreshness = freshness
+        currentState = state
+        applyFreshness(freshness)
+        if readoutVisible { refreshReadout() }
+    }
 
+    /// Color the Halo/Bloom for `freshness` (staled + frozen when stale, else the
+    /// live hue). Animates ONLY when the state or freshness actually changes, so a
+    /// coarse tick that re-reports the same reading never re-drives the glow (it
+    /// stays a static CALayer at rest — DECISIONS.md "zero idle overhead").
+    private func applyFreshness(_ freshness: Freshness) {
+        currentFreshness = freshness
         let isStale = freshness == .stale
-        let base = NSColor(hex: state.hex) ?? .systemGray
+        let base = NSColor(hex: currentState.hex) ?? .systemGray
         currentAccent = isStale ? base.staled() : base
 
-        // Animate the Halo/Bloom ONLY when the state or freshness actually
-        // changes; a coarse tick that re-reports the same reading must not
-        // re-drive the glow (it stays a static CALayer at rest — DECISIONS.md
-        // "zero idle overhead").
-        if state != lastState || freshness != lastFreshness {
+        if currentState != lastState || freshness != lastFreshness {
             let duration: CFTimeInterval = isStale ? StaleStyle.fadeDuration : 0.4
             haloView.setColor(currentAccent, animated: true, duration: duration)
             if isStale {
                 glow.freeze(at: StaleStyle.glowLevel, duration: StaleStyle.fadeDuration)
             } else {
                 glow.unfreeze()
-                glow.setState(state)
+                glow.setState(currentState)
             }
-            lastState = state
+            lastState = currentState
             lastFreshness = freshness
         }
-        if readoutVisible { refreshReadout() }
     }
 
     /// Show/hide + pick the surface treatment for the current display. Non-notch +
@@ -234,6 +239,14 @@ final class NotchWindowController {
     }
 
     private func refreshReadout() {
+        // Freshness is time-derived: it flips to .stale as the clock passes the
+        // threshold with no new data. Re-derive it at look-time so the hover view
+        // (Halo hue, pill, age line) is never staler than the menu — which
+        // recomputes freshness live on open — between the coarse ticks that paint.
+        if let aggregate = currentAggregate {
+            let fresh = aggregate.freshness(now: Date())
+            if fresh != currentFreshness { applyFreshness(fresh) }
+        }
         let fields = currentAggregate.map {
             ReadoutFormatting.compact(for: $0, freshness: currentFreshness)
         } ?? ReadoutFormatting.Fields(
