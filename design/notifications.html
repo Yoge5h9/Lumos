@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumos — notification pill playground</title>
+<style>
+  :root{
+    --calm:#30d158; --watch:#ffd60a; --alert:#ff453a; --idle:#8c8c8c;
+    --c:var(--calm);
+    --info:#64d2ff; --tip:#bf5af2;
+    --notch-w:172px; --notch-h:38px;
+    --thick:2.5px; --glow:9px; --radius:14px;
+    --stage-pad:30px;
+    --bg:#050506; --line:#1c1c22; --dim:#8c8c92; --panel:#0d0d10; --txt:#e9e9ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+
+  /* ---------- brand header (shared treatment across all pages) ---------- */
+  header.brandbar{display:flex;align-items:center;padding:16px 24px;
+      background:linear-gradient(#101014,#0a0a0d);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:.2px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 9px var(--calm)}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px;margin-left:2px;letter-spacing:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+      color:#6c6c72;margin:0 0 8px}
+
+  /* ---------- compare layout: two hardware sections side by side ---------- */
+  .comparecard{max-width:1080px;margin:26px auto 0;border-radius:18px;overflow:hidden;
+      border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 30px 70px -30px rgba(0,0,0,.65),0 0 0 1px rgba(0,0,0,.35)}
+  .compare{display:flex;gap:0;flex-wrap:wrap;align-items:stretch}
+  .compare-col{flex:1 1 420px;min-width:340px;display:flex;flex-direction:column}
+  .compare-col + .compare-col{border-left:1px solid #1a1a1e}
+  .section-head{padding:14px 18px 10px;background:#0a0a0c;border-bottom:1px solid #1a1a1e;
+      min-height:84px}
+  .section-label{font-size:12.5px;font-weight:600;color:#e9e9ea;letter-spacing:.2px;
+      display:flex;align-items:center;gap:8px;margin:0}
+  .section-label .dot{width:6px;height:6px;border-radius:50%}
+  .section-label .dot.hw-notch{background:#8c8c92}
+  .section-label .dot.hw-flat{background:var(--calm)}
+  .section-caption{font-size:11.5px;color:#6c6c72;margin:4px 0 0}
+
+  /* ---------- stage / menubar (shared shell for both sections) ---------- */
+  .stage{position:relative;height:390px;background:
+      linear-gradient(#0a0a0c,#050506 60%);overflow:hidden}
+  .menubar{position:absolute;top:var(--stage-pad);left:0;right:0;height:var(--notch-h);
+      background:#111114;display:flex;align-items:center;justify-content:flex-end;
+      gap:16px;padding:0 18px;color:#c7c7cc;font-size:12px}
+  .led{width:11px;height:11px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 7px var(--calm)}
+
+  /* ---------- section 1: physical notch ---------- */
+  .notchwrap{position:absolute;top:var(--stage-pad);left:50%;transform:translateX(-50%);
+      width:var(--notch-w);height:var(--notch-h)}
+  .halo{position:absolute;top:0;left:calc(-1*var(--thick));
+      width:calc(var(--notch-w) + 2*var(--thick));height:calc(var(--notch-h) + var(--thick));
+      border:var(--thick) solid var(--calm);border-top:none;
+      border-bottom-left-radius:calc(var(--radius) + 2px);
+      border-bottom-right-radius:calc(var(--radius) + 2px);
+      filter:drop-shadow(0 0 var(--glow) var(--calm))}
+  .notch{position:absolute;top:0;left:0;width:var(--notch-w);height:var(--notch-h);
+      background:#000;border-bottom-left-radius:var(--radius);
+      border-bottom-right-radius:var(--radius);z-index:2}
+
+  /* ---------- section 2: no physical notch — thin top-center glow bar ---------- */
+  .glowbar{position:absolute;top:var(--stage-pad);left:50%;transform:translateX(-50%);
+      width:184px;height:4px;border-radius:999px;background:var(--calm);z-index:2;
+      box-shadow:0 0 7px 1px var(--calm),0 0 16px 2px rgba(48,209,88,.5),
+                 0 10px 24px -6px rgba(48,209,88,.6)}
+
+  /* ---------- notification stack (the Bleed, downward) — shared by both ---------- */
+  .notif-stack{position:absolute;top:calc(var(--stage-pad) + var(--notch-h) + 4px);left:50%;
+      transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;
+      gap:10px;z-index:5}
+
+  .notif-pill{position:relative;width:320px;transform-origin:top center;
+      transform:scaleX(.42) scaleY(.06);opacity:0;
+      background:rgba(30,30,33,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+      border-radius:16px;padding:12px 34px 12px 14px;box-shadow:0 6px 22px rgba(0,0,0,.45);
+      display:flex;gap:10px;align-items:flex-start;
+      transition:transform .36s cubic-bezier(.22,1,.32,1.06),opacity .28s ease;
+      border:1px solid rgba(255,255,255,.05)}
+  .notif-pill.out{transform:scaleX(1) scaleY(1);opacity:1}
+  .notif-pill.muted{opacity:.42;filter:grayscale(.55) saturate(.6)}
+  .notif-pill.muted.out{opacity:.42}
+  .notif-stack.stacked .notif-pill:nth-child(2){transition-delay:.07s}
+  .notif-stack.stacked .notif-pill:nth-child(3){transition-delay:.14s}
+
+  .notif-icon{flex:0 0 auto;width:24px;height:24px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
+      color:var(--accent, var(--watch));background:var(--accent-bg, rgba(255,214,10,.15));
+      margin-top:1px}
+  .notif-pill.type-context{--accent:var(--watch);--accent-bg:rgba(255,214,10,.15)}
+  .notif-pill.type-timing{--accent:var(--info);--accent-bg:rgba(100,210,255,.15)}
+  .notif-pill.type-tip{--accent:var(--tip);--accent-bg:rgba(191,90,242,.15)}
+
+  .notif-body{flex:1 1 auto;min-width:0}
+  .notif-tag{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+      color:var(--accent, #a1a1a8);margin-bottom:3px}
+  .notif-msg{font-size:12px;line-height:1.46;color:#e9e9ea;letter-spacing:.1px}
+  .notif-msg b{color:var(--accent);font-weight:600}
+
+  .notif-actions{margin-top:7px;height:14px}
+  .notif-dismiss-again{background:none;border:none;padding:0;font:inherit;font-size:11px;
+      color:rgba(255,255,255,.5);cursor:pointer;opacity:0;transition:opacity .15s ease,color .15s ease}
+  .notif-dismiss-again:hover{color:rgba(255,255,255,.85);text-decoration:underline}
+
+  .notif-close{position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;
+      border:none;background:transparent;color:rgba(255,255,255,.45);font-size:14px;line-height:1;
+      cursor:pointer;opacity:0;transition:opacity .15s ease,background .15s ease,color .15s ease;
+      display:flex;align-items:center;justify-content:center}
+  .notif-close:hover{background:rgba(255,255,255,.1);color:#fff}
+
+  .notif-pill:hover .notif-close,.notif-pill:hover .notif-dismiss-again{opacity:1}
+  .notif-pill.muted .notif-close,.notif-pill.muted .notif-dismiss-again{opacity:0 !important;pointer-events:none}
+
+  /* ---------- controls (shared across both sections) ---------- */
+  .panel{max-width:900px;margin:26px auto;padding:0 20px 60px}
+  .sub{color:var(--dim);margin:0 0 22px;font-size:13px;line-height:1.6}
+  .row{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;align-items:center}
+  .row .lbl{width:150px;color:#a1a1a8;font-size:12px;flex:0 0 auto}
+  button{background:#1c1c20;color:var(--txt);border:1px solid #2c2c31;border-radius:9px;
+      padding:7px 14px;cursor:pointer;font:inherit;font-size:13px;
+      transition:background .15s cubic-bezier(.4,0,.2,1),border-color .15s cubic-bezier(.4,0,.2,1),box-shadow .15s cubic-bezier(.4,0,.2,1)}
+  button:hover{background:#26262b;border-color:#37373d}
+  button.on{border-color:var(--c);color:#fff;box-shadow:0 0 0 1px var(--c) inset}
+  .hint{color:#6c6c72;font-size:12px}
+  code{background:#161619;padding:1px 6px;border-radius:5px;color:#c7c7cc}
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+
+  @media (max-width:760px){
+    .compare-col + .compare-col{border-left:none;border-top:1px solid #1a1a1e}
+  }
+</style>
+</head>
+<body>
+  <header class="brandbar">
+    <div class="brand"><span class="dot"></span>Lumos <small>Context · Timing · Tip — calm, dismissible, never a popup</small></div>
+  </header>
+  <div class="comparecard">
+  <div class="compare">
+    <div class="compare-col">
+      <div class="section-head">
+        <p class="section-label"><span class="dot hw-notch"></span>On a notched Mac</p>
+        <p class="section-caption">Pill Bleeds down out of the physical black notch, inside the Halo ring.</p>
+      </div>
+      <div class="stage">
+        <div class="menubar"><span class="led"></span><span>100%</span><span>􀙇</span><span>􀋲</span><span>Sat 1:24</span></div>
+        <div class="notchwrap">
+          <div class="halo"></div>
+          <div class="notch"></div>
+        </div>
+        <div class="notif-stack" id="stackNotch"></div>
+      </div>
+    </div>
+
+    <div class="compare-col">
+      <div class="section-head">
+        <p class="section-label"><span class="dot hw-flat"></span>On a non-notch Mac</p>
+        <p class="section-caption">No physical cutout — a thin top-edge glow bar stands in for the notch; the pill Bleeds down from just beneath it.</p>
+      </div>
+      <div class="stage">
+        <div class="menubar"><span class="led"></span><span>100%</span><span>􀙇</span><span>􀋲</span><span>Sat 1:24</span></div>
+        <div class="glowbar"></div>
+        <div class="notif-stack" id="stackFlat"></div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div class="panel">
+    <p class="eyebrow">Playground controls</p>
+    <p class="sub">The "aware-of-you" notifications, compared across hardware: both anchors Bleed the same pill family down from the top-center. Hover a pill to reveal <code>×</code> dismiss and <code>Don't show again</code> — calm by default.</p>
+
+    <div class="row"><span class="lbl">Fire a notification</span>
+      <button id="btnContext"><span class="swatch" style="background:var(--watch)"></span>Context</button>
+      <button id="btnTiming"><span class="swatch" style="background:var(--info)"></span>Timing</button>
+      <button id="btnTip"><span class="swatch" style="background:var(--tip)"></span>Tip</button>
+      <button id="btnCycleTip">Cycle tip →</button>
+    </div>
+    <p class="hint" style="margin:-6px 0 4px">Fires into both sections at once, so you can compare anchoring side by side.</p>
+
+    <div class="row"><span class="lbl">Layout</span>
+      <button id="modeSingle" class="on">Single</button>
+      <button id="modeStacked">Stacked (2–3 queued)</button>
+    </div>
+
+    <div class="row"><span class="lbl">Playback</span>
+      <button id="btnReplay">Replay animation</button>
+      <button id="btnClear">Clear all</button>
+    </div>
+
+    <div class="row"><span class="lbl">Calm contract</span>
+      <button id="btnQuiet">Show muted / quiet-hours pill</button>
+      <span class="hint">quiet hours don't suppress silently — they show a dimmed, non-interactive pill instead</span>
+    </div>
+
+    <p class="hint">Types: <code>Context</code> amber — the one time-sensitive warning · <code>Timing</code> blue — window insight · <code>Tip</code> violet — rotating, low-priority.</p>
+  </div>
+
+<script>
+  const TIPS = [
+    "Tip: spin off big searches to subagents to keep your main context lean.",
+    "Tip: /compact at a natural breakpoint beats letting context fill.",
+    "Tip: use Plan mode for big changes before editing."
+  ];
+  let tipIndex = 0;
+
+  const DEFS = {
+    context: {
+      type: 'context', icon: '!', tag: 'Context',
+      msg: 'Context at <b>38%</b> — quality dips past ~40%. Start a fresh session, or write a handoff doc &amp; /compact.'
+    },
+    timing: {
+      type: 'timing', icon: '◔', tag: 'Timing',
+      msg: 'You peak around <b>11am</b>. Prime your 5-hour window ~8am for a fresh window through your busy stretch.'
+    },
+    tip: {
+      type: 'tip', icon: '✦', tag: 'Tip',
+      get msg(){ return TIPS[tipIndex]; }
+    }
+  };
+
+  function buildPillEl(item){
+    const { def, muted, uid } = item;
+    const el = document.createElement('div');
+    el.className = `notif-pill type-${def.type}` + (muted ? ' muted' : '');
+    el.dataset.uid = uid;
+    el.innerHTML = `
+      <div class="notif-icon">${def.icon}</div>
+      <div class="notif-body">
+        <div class="notif-tag">${muted ? def.tag + ' · muted' : def.tag}</div>
+        <div class="notif-msg">${def.msg}</div>
+        ${muted ? '' : `<div class="notif-actions"><button class="notif-dismiss-again">Don’t show again</button></div>`}
+      </div>
+      ${muted ? '' : `<button class="notif-close" aria-label="Dismiss">&times;</button>`}
+    `;
+    return el;
+  }
+
+  // one controller per stack (notch section, flat section) — same behavior, independent DOM
+  function makeStackController(stackEl){
+    let mode = 'single';
+    let queue = [];
+    let uidSeq = 0;
+
+    function render(){
+      stackEl.classList.toggle('stacked', mode === 'stacked');
+      stackEl.innerHTML = '';
+      const els = queue.map(item => {
+        const el = buildPillEl(item);
+        const closeBtn = el.querySelector('.notif-close');
+        const againBtn = el.querySelector('.notif-dismiss-again');
+        if (closeBtn) closeBtn.onclick = () => dismiss(item.uid);
+        if (againBtn) againBtn.onclick = () => dismiss(item.uid);
+        stackEl.appendChild(el);
+        return el;
+      });
+      // force reflow so the entrance transition actually plays from the sliver state
+      void stackEl.offsetHeight;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => els.forEach(el => el.classList.add('out')));
+      });
+    }
+
+    function push(defKey, { muted = false } = {}){
+      const def = DEFS[defKey];
+      const item = { uid: ++uidSeq, def, muted };
+      queue = mode === 'single' ? [item] : [item, ...queue].slice(0, 3);
+      render();
+    }
+
+    function dismiss(uid){
+      const el = stackEl.querySelector(`[data-uid="${uid}"]`);
+      if (el){
+        el.classList.remove('out');
+        el.addEventListener('transitionend', () => {
+          queue = queue.filter(q => q.uid !== uid);
+          render();
+        }, { once: true });
+      } else {
+        queue = queue.filter(q => q.uid !== uid);
+        render();
+      }
+    }
+
+    function replay(){
+      const els = [...stackEl.children];
+      if (!els.length) return;
+      els.forEach(el => el.classList.remove('out'));
+      void stackEl.offsetHeight;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => els.forEach(el => el.classList.add('out')));
+      });
+    }
+
+    function clear(){
+      const els = [...stackEl.children];
+      els.forEach(el => el.classList.remove('out'));
+      setTimeout(() => { queue = []; render(); }, 380);
+    }
+
+    function setMode(m){
+      mode = m;
+      if (mode === 'single' && queue.length) queue = [queue[0]];
+      render();
+    }
+
+    return { push, dismiss, replay, clear, setMode };
+  }
+
+  const notchStack = makeStackController(document.getElementById('stackNotch'));
+  const flatStack  = makeStackController(document.getElementById('stackFlat'));
+
+  document.getElementById('btnContext').onclick = () => { notchStack.push('context'); flatStack.push('context'); };
+  document.getElementById('btnTiming').onclick  = () => { notchStack.push('timing');  flatStack.push('timing'); };
+  document.getElementById('btnTip').onclick     = () => { notchStack.push('tip');     flatStack.push('tip'); };
+  document.getElementById('btnCycleTip').onclick = () => {
+    tipIndex = (tipIndex + 1) % TIPS.length;
+    notchStack.push('tip'); flatStack.push('tip');
+  };
+  document.getElementById('btnReplay').onclick = () => { notchStack.replay(); flatStack.replay(); };
+  document.getElementById('btnClear').onclick  = () => { notchStack.clear(); flatStack.clear(); };
+  document.getElementById('btnQuiet').onclick  = () => { notchStack.push('context', { muted: true }); flatStack.push('context', { muted: true }); };
+
+  document.getElementById('modeSingle').onclick = (e) => {
+    e.target.classList.add('on');
+    document.getElementById('modeStacked').classList.remove('on');
+    notchStack.setMode('single'); flatStack.setMode('single');
+  };
+  document.getElementById('modeStacked').onclick = (e) => {
+    e.target.classList.add('on');
+    document.getElementById('modeSingle').classList.remove('on');
+    notchStack.setMode('stacked'); flatStack.setMode('stacked');
+  };
+
+  // opening demo: a single Context pill emerging in both sections
+  notchStack.push('context');
+  flatStack.push('context');
+</script>
+</body>
+</html>

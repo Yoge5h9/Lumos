@@ -1,0 +1,67 @@
+[
+  {
+    "id": "tip.compact",
+    "title": "Keep context crisp",
+    "body": "Long session getting heavy? /compact summarizes the thread and frees up context."
+  },
+  {
+    "id": "tip.handoff",
+    "title": "Hand off, don't hoard",
+    "body": "Near a context limit? Write a short handoff note and start a fresh session — quality holds up better."
+  },
+  {
+    "id": "tip.resume",
+    "title": "Pick up where you left off",
+    "body": "claude --resume reopens a past session so you don't lose the thread across a break."
+  },
+  {
+    "id": "tip.clear",
+    "title": "Start clean between tasks",
+    "body": "Switching to an unrelated task? /clear gives Claude a fresh slate and a lighter context."
+  },
+  {
+    "id": "tip.prime",
+    "title": "Time your window",
+    "body": "Your 5-hour window starts on first use — kick it off just before your busy stretch to cover it fully."
+  },
+  {
+    "id": "tip.plan",
+    "title": "Think before building",
+    "body": "Ask for a plan first on a big change, review it, then let Claude execute — fewer wrong turns."
+  },
+  {
+    "id": "tip.subagent",
+    "title": "Offload to a subagent",
+    "body": "Big search or side task? A subagent runs in its own context so your main thread stays lean."
+  },
+  {
+    "id": "tip.cowork",
+    "title": "Meet Cowork",
+    "body": "Claude's agentic workspace for non-coding work — research, docs, spreadsheets. Describe the outcome, step away, come back to finished work."
+  },
+  {
+    "id": "tip.cowork-boost",
+    "title": "Cowork has extra usage right now",
+    "body": "For a limited time, Cowork's 5-hour limit is boosted on paid plans — a good moment to try agentic work. Check claude.ai for current limits."
+  },
+  {
+    "id": "tip.chrome",
+    "title": "Claude in your browser",
+    "body": "Claude for Chrome is a sidebar agent that can see and click pages — navigate, fill forms, pull data. Needs a paid plan."
+  },
+  {
+    "id": "tip.chrome-replay",
+    "title": "Record once, replay later",
+    "body": "Show Claude for Chrome a browser task once and it can rerun it on a schedule — daily, weekly, monthly."
+  },
+  {
+    "id": "tip.remote",
+    "title": "Drive Claude Code from your phone",
+    "body": "Remote Control lets your phone send a task to a Claude Code session on your Mac and check progress on the go."
+  },
+  {
+    "id": "tip.artifacts",
+    "title": "Replies become mini-apps",
+    "body": "Artifacts turn a Claude answer into a live, shareable preview — code, HTML, diagrams, React — on every plan."
+  }
+]

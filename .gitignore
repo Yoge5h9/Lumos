@@ -1,0 +1,32 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Swift Package Manager / build output
+.build/
+.swiftpm/
+Packages/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Xcode
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+
+# App bundle build artifacts (Lumos.app is compiled, never committed)
+*.app
+
+# Logs / temp
+*.log
+*.tmp
+
+# Editor
+.vscode/
+.idea/
+
+# Note: Package.resolved IS committed (pins deps for reproducible brew builds).

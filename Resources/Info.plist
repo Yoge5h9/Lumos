@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- PLACEHOLDER: reverse-DNS bundle id. Reserve a real domain/handle before first release
+	     (e.g. com.<github-user>.lumos) and update here + in the Homebrew formula/assemble script. -->
+	<key>CFBundleIdentifier</key>
+	<string>com.lumos.app</string>
+
+	<key>CFBundleName</key>
+	<string>lumos</string>
+
+	<key>CFBundleDisplayName</key>
+	<string>Lumos</string>
+
+	<key>CFBundleExecutable</key>
+	<string>lumos</string>
+
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<!-- Menu-bar agent: no dock icon, no Cmd-Tab entry. Non-negotiable per DISTRIBUTION.md. -->
+	<key>LSUIElement</key>
+	<true/>
+
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+
+	<!-- PLACEHOLDER: bump per tagged release; assemble-app.sh / the Homebrew formula should
+	     keep this in sync with the git tag (e.g. via sed at build time). -->
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+
+	<!-- PLACEHOLDER: build number; bump alongside CFBundleShortVersionString. -->
+	<key>CFBundleVersion</key>
+	<string>1</string>
+
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright (c) 2026 The Lumos authors. MIT License.</string>
+
+	<key>NSHighResolutionCapable</key>
+	<true/>
+
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+</dict>
+</plist>

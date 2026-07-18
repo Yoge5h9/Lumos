@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumos — non-notch fallbacks</title>
+<style>
+  :root{
+    --calm:#30d158; --watch:#ffd60a; --alert:#ff453a; --idle:#8c8c8c;
+    --c:var(--calm);
+    --bg:#050506; --line:#1c1c22; --dim:#8c8c92; --panel:#0d0d10; --txt:#e9e9ea;
+    --glow:14px;
+    --bar-h:4px;
+    --bar-w:200px;
+    --stage-pad:26px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+
+  /* ---------- brand header (shared treatment across all pages) ---------- */
+  header.brandbar{display:flex;align-items:center;padding:16px 24px;
+      background:linear-gradient(#101014,#0a0a0d);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:.2px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 9px var(--calm)}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px;margin-left:2px;letter-spacing:0}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;
+      color:#6c6c72;margin:0 0 8px}
+
+  .top{max-width:1180px;margin:0 auto;padding:28px 20px 6px}
+  .sub{color:var(--dim);margin:0 0 18px;max-width:760px;font-size:13px;line-height:1.6}
+
+  .controls{max-width:1180px;margin:0 auto;padding:0 20px 8px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0;align-items:center}
+  .row .lbl{width:140px;color:#a1a1a8;font-size:12px;flex-shrink:0}
+  button{background:#1c1c20;color:var(--txt);border:1px solid #2c2c31;border-radius:9px;
+      padding:7px 14px;cursor:pointer;font:inherit;font-size:13px;
+      transition:background .15s cubic-bezier(.4,0,.2,1),border-color .15s cubic-bezier(.4,0,.2,1),box-shadow .15s cubic-bezier(.4,0,.2,1)}
+  button:hover{background:#26262b;border-color:#37373d}
+  button.on{border-color:var(--c);color:#fff;box-shadow:0 0 0 1px var(--c) inset}
+  input[type=range]{width:180px;accent-color:var(--c)}
+  .hint{color:#6c6c72;font-size:12px}
+  code{background:#161619;padding:1px 6px;border-radius:5px;color:#c7c7cc}
+
+  /* ---- the two finalists, hero-sized ---- */
+  .grid{max-width:1180px;margin:14px auto 22px;padding:0 20px;
+      display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+  @media (max-width:860px){ .grid{grid-template-columns:1fr} }
+
+  .card{background:#0b0b0d;border:1px solid #1a1a1e;border-radius:16px;overflow:hidden;
+      box-shadow:0 24px 50px -28px rgba(0,0,0,.6)}
+  .card.primary{border-color:#22301f}
+  .stage{position:relative;height:256px;background:linear-gradient(#0a0a0c,#050506 65%);
+      overflow:hidden}
+  .menubar{position:absolute;top:var(--stage-pad);left:0;right:0;height:38px;
+      background:#111114;display:flex;align-items:center;justify-content:flex-end;
+      gap:16px;padding:0 18px;color:#c7c7cc;font-size:12px;z-index:5}
+  .menubar .sp{flex:1}
+  .led{width:11px;height:11px;border-radius:50%;background:var(--c);
+      box-shadow:0 0 7px var(--c);transition:background .4s,box-shadow .4s;flex-shrink:0}
+
+  .meta{padding:18px 22px 22px}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;
+      text-transform:uppercase;padding:3px 9px;border-radius:20px;margin-bottom:9px}
+  .badge.rec{background:rgba(48,209,88,.14);color:var(--calm);border:1px solid rgba(48,209,88,.35)}
+  .badge.opt{background:rgba(255,255,255,.06);color:#a1a1a8;border:1px solid rgba(255,255,255,.12)}
+  .meta h2{font-size:16px;font-weight:600;margin:0 0 6px;color:#f2f2f3}
+  .meta p{margin:0;color:#8c8c92;font-size:12.8px;line-height:1.55;max-width:480px}
+  .lookfor{margin:0 0 9px !important;font-size:11.5px !important;font-weight:600;
+      color:var(--c) !important;text-transform:uppercase;letter-spacing:.3px;
+      transition:color .4s}
+
+  /* Finalist 1: thin, understated glow line at top-center — NOT a chunky pill, NOT notch-shaped */
+  .fauxnotch{position:absolute;top:var(--stage-pad);left:50%;transform:translateX(-50%);
+      width:var(--bar-w);height:var(--bar-h);border-radius:999px;
+      background:var(--c);
+      box-shadow:
+        0 0 calc(var(--glow)*0.4) var(--c),
+        0 2px calc(var(--glow)*0.9) var(--c),
+        0 4px calc(var(--glow)*1.6) var(--c);
+      transition:background .4s,box-shadow .4s,width .2s,height .2s;z-index:8}
+
+  /* Finalist 2: LED only — nothing above the menu bar; the absence of glow is the point */
+
+  .breathe-bar{animation:breatheBar 2.4s ease-in-out infinite}
+  @keyframes breatheBar{
+    0%,100%{box-shadow:0 0 calc(var(--glow)*0.4) var(--c),0 2px calc(var(--glow)*0.9) var(--c),
+        0 4px calc(var(--glow)*1.6) var(--c)}
+    50%{box-shadow:0 0 calc(var(--glow)*0.7) var(--c),0 2px calc(var(--glow)*1.5) var(--c),
+        0 4px calc(var(--glow)*2.6) var(--c)}
+  }
+  .breathe-led{animation:breatheLed 2.4s ease-in-out infinite}
+  @keyframes breatheLed{
+    0%,100%{box-shadow:0 0 7px var(--c)}
+    50%{box-shadow:0 0 16px var(--c)}
+  }
+
+  .rejected{max-width:1180px;margin:0 auto;padding:0 20px 12px;color:#6c6c72;font-size:12px}
+  .rejected b{color:#8c8c92;font-weight:600}
+
+  footer{max-width:1180px;margin:0 auto;padding:0 20px 60px;color:#6c6c72;font-size:12px}
+  footer .lex{margin-top:6px}
+</style>
+</head>
+<body>
+  <header class="brandbar">
+    <div class="brand"><span class="dot"></span>Lumos <small>2 finalists for Macs without a notch</small></div>
+  </header>
+
+  <div class="top">
+    <p class="eyebrow">Non-notch fallbacks</p>
+    <p class="sub">Older MacBooks, iMac, Mac mini, and external displays have no notch to glow around.
+      Design decision is finalized: two treatments ship for these Macs — one default, one optional.
+      Compare both side by side, in every state.</p>
+  </div>
+
+  <div class="controls">
+    <div class="row"><span class="lbl">State</span>
+      <button data-state="calm" class="on">Calm · 2%</button>
+      <button data-state="watch">Watch · 68%</button>
+      <button data-state="alert">Alert · 92%</button>
+      <button data-state="idle">Idle · waiting</button>
+    </div>
+    <div class="row"><span class="lbl">Glow intensity</span>
+      <input type="range" id="glow" min="4" max="40" step="1" value="14">
+      <span class="hint">tuned to look restrained at Calm — dial up only if it reads too subtle</span>
+    </div>
+    <div class="row"><span class="lbl">Bar height</span>
+      <input type="range" id="barh" min="3" max="8" step="0.5" value="4">
+      <span class="hint">finalist 1 only — stays thin, never a chunky pill</span>
+    </div>
+    <div class="row"><span class="lbl">Bar width</span>
+      <input type="range" id="barw" min="160" max="260" step="5" value="200">
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <!-- Finalist: menu-bar LED only (chosen default) -->
+    <div class="card primary">
+      <div class="stage">
+        <div class="menubar"><span class="sp"></span><span class="led"></span><span>&#xf8ff;</span><span>Sat 1:24</span></div>
+      </div>
+      <div class="meta">
+        <span class="badge rec">Recommended default</span>
+        <h2>Menu-bar LED only</h2>
+        <p class="lookfor">Look for: nothing above the bar — only the small dot.</p>
+        <p>No screen glow at all — just the colored dot already living in the menu bar. Works
+          identically on every Mac, notch or not, never looks like a rendering artifact, and stays
+          out of the way. This is what ships by default on non-notch Macs.</p>
+      </div>
+    </div>
+
+    <!-- Finalist: thin top-center glow line (optional secondary) -->
+    <div class="card">
+      <div class="stage">
+        <div class="menubar"><span class="sp"></span><span class="led"></span><span>&#xf8ff;</span><span>Sat 1:24</span></div>
+        <div class="fauxnotch" id="fauxnotch"></div>
+      </div>
+      <div class="meta">
+        <span class="badge opt">Optional secondary</span>
+        <h2>Top-center glow bar (faux-notch)</h2>
+        <p class="lookfor">Look for: a thin, soft light line centered at the very top — not a shape.</p>
+        <p>A slim rounded line of light with a soft bloom beneath it, centered where a notch would
+          sit. Deliberately understated — a hint, not a shout — so it never reads as a fake notch
+          or a graphical glitch. Available for users who want a touch more glanceability than the
+          LED alone.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="rejected"><b>Also considered, rejected:</b> a full-width top-edge glow (competed with
+    bright wallpapers) and a floating ambient percentage pill (too much persistent chrome).</div>
+
+  <footer>
+    <div>Both finalists are non-notch fallbacks for the <code>Halo</code> — on notch-equipped Macs,
+      Lumos always prefers the real Halo + Bloom around the physical notch.</div>
+    <div class="lex">Lexicon: <code>Halo</code> ring · <code>Bloom</code> glow · <code>LED</code> menu-bar dot ·
+      states <code>Calm/Watch/Alert/Idle</code>.</div>
+  </footer>
+
+<script>
+  const root=document.documentElement;
+  const fauxnotch=document.getElementById('fauxnotch');
+
+  const states={
+    calm:{v:'--calm',pct:'2%'},
+    watch:{v:'--watch',pct:'68%'},
+    alert:{v:'--alert',pct:'92%'},
+    idle:{v:'--idle',pct:'—'}
+  };
+
+  function setState(k){
+    const s=states[k];
+    root.style.setProperty('--c',`var(${s.v})`);
+    const breathing = k==='alert';
+    fauxnotch.classList.toggle('breathe-bar',breathing);
+    document.querySelectorAll('.led').forEach(l=>l.classList.toggle('breathe-led',breathing));
+    document.querySelectorAll('[data-state]').forEach(b=>b.classList.toggle('on',b.dataset.state===k));
+  }
+  document.querySelectorAll('[data-state]').forEach(b=>b.onclick=()=>setState(b.dataset.state));
+
+  document.getElementById('glow').oninput=e=>root.style.setProperty('--glow',e.target.value+'px');
+  document.getElementById('barh').oninput=e=>root.style.setProperty('--bar-h',e.target.value+'px');
+  document.getElementById('barw').oninput=e=>root.style.setProperty('--bar-w',e.target.value+'px');
+
+  setState('calm');
+</script>
+</body>
+</html>

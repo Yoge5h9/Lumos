@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumos — interactions</title>
+<style>
+  :root{
+    --calm:#30d158; --watch:#ffd60a; --alert:#ff453a; --idle:#8c8c8c;
+    --c:var(--calm);
+    --notch-w:200px; --notch-h:38px; --thick:2.5px; --radius:14px;
+
+    --bg:#050506; --strip:#111114; --line:#1c1c22; --panel:#0c0c0f;
+    --txt:#e9e9ea; --dim:#8c8c92; --faint:#6c6c72;
+
+    /* Demo-1 tunables (JS-driven) */
+    --dim-level:.30;      /* resting glow intensity 0..1 */
+    --bright-level:1;     /* peak glow intensity 0..1 */
+    --fade-ms:1400ms;     /* how slowly bright eases to dim */
+    --glow-base:11px;     /* base bloom radius, scaled by level */
+    --lum:var(--dim-level); /* current luminance, animated */
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+       background:
+         radial-gradient(1100px 620px at 50% -180px,#0e0e13 0%,rgba(14,14,19,0) 62%),
+         var(--bg);
+       color:var(--txt);-webkit-font-smoothing:antialiased;
+       text-rendering:optimizeLegibility}
+  ::selection{background:rgba(48,209,88,.28)}
+
+  /* ---------------- brand header ---------------- */
+  header.brandbar{display:flex;align-items:center;justify-content:space-between;
+      padding:20px 30px;background:linear-gradient(#101014,#0a0a0d);
+      border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50;
+      backdrop-filter:blur(8px)}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:600;font-size:15px;letter-spacing:.2px}
+  .brand .mark{width:13px;height:13px;border-radius:50%;background:var(--calm);
+      box-shadow:0 0 10px var(--calm),0 0 22px rgba(48,209,88,.5);
+      animation:markPulse 4.5s ease-in-out infinite}
+  @keyframes markPulse{0%,100%{box-shadow:0 0 8px var(--calm),0 0 16px rgba(48,209,88,.35)}
+      50%{box-shadow:0 0 13px var(--calm),0 0 30px rgba(48,209,88,.6)}}
+  .brand .name{background:linear-gradient(#fff,#c9c9cf);-webkit-background-clip:text;
+      background-clip:text;color:transparent}
+  .brand small{color:var(--dim);font-weight:400;font-size:12px;margin-left:4px;letter-spacing:0}
+  .brandbar .tag{color:var(--faint);font-size:11px;font-weight:600;letter-spacing:.7px;
+      text-transform:uppercase;border:1px solid var(--line);border-radius:20px;padding:5px 12px}
+
+  /* ---------------- layout ---------------- */
+  .wrap{max-width:1140px;margin:0 auto;padding:34px 30px 90px}
+  .intro{max-width:680px;margin:14px 0 40px}
+  .intro h1{font-size:26px;line-height:1.25;margin:0 0 12px;font-weight:600;letter-spacing:-.2px;
+      background:linear-gradient(#fff,#b9b9c0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .intro p{color:var(--dim);font-size:14.5px;line-height:1.65;margin:0}
+
+  section.demo{margin:0 0 30px;border:1px solid var(--line);border-radius:22px;overflow:hidden;
+      background:linear-gradient(#0b0b0e,#08080a);
+      box-shadow:0 30px 70px -34px rgba(0,0,0,.7)}
+  .demo-head{padding:26px 30px 20px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;
+      letter-spacing:.7px;text-transform:uppercase;color:var(--faint);margin:0 0 11px}
+  .eyebrow .num{display:inline-flex;align-items:center;justify-content:center;
+      width:20px;height:20px;border-radius:6px;background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.08);color:#c7c7cc;font-size:11px}
+  .demo-head h2{margin:0 0 8px;font-size:19px;font-weight:600;letter-spacing:-.1px}
+  .demo-head p{margin:0;color:var(--dim);font-size:13.5px;line-height:1.6;max-width:640px}
+  .demo-head .accent{color:#c7c7cc}
+
+  .demo-body{display:grid;grid-template-columns:1fr 340px;gap:0}
+  @media (max-width:900px){.demo-body{grid-template-columns:1fr}}
+
+  /* ---------------- stage ---------------- */
+  .stage{position:relative;min-height:360px;
+      background:
+        radial-gradient(520px 300px at 50% -60px,#141419 0%,rgba(20,20,25,0) 70%),
+        linear-gradient(#0a0a0c,#050506 62%);
+      border-right:1px solid rgba(255,255,255,.05);overflow:hidden;
+      display:flex;align-items:flex-start;justify-content:center}
+  .stage.allow-overflow{overflow:visible}
+  @media (max-width:900px){.stage{border-right:none;border-bottom:1px solid rgba(255,255,255,.05)}}
+  .strip{position:absolute;top:0;left:0;right:0;height:var(--notch-h);background:var(--strip);
+      display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 18px;
+      color:#c7c7cc;font-size:12px;z-index:4}
+  .strip .glyph{color:#9a9aa0}
+  .stage .floor-label{position:absolute;bottom:16px;left:0;right:0;text-align:center;
+      color:var(--faint);font-size:11.5px;letter-spacing:.3px}
+
+  /* notch + halo */
+  .notchwrap{position:absolute;top:0;left:50%;transform:translateX(-50%);
+      width:var(--notch-w);height:var(--notch-h);z-index:3}
+  .halo{position:absolute;top:0;left:calc(-1*var(--thick));
+      width:calc(var(--notch-w) + 2*var(--thick));height:calc(var(--notch-h) + var(--thick));
+      border:var(--thick) solid var(--c);border-top:none;
+      border-bottom-left-radius:calc(var(--radius) + 2px);
+      border-bottom-right-radius:calc(var(--radius) + 2px);
+      /* brightness driven by --lum: opacity of ring + size/strength of bloom */
+      opacity:calc(.34 + .66*var(--lum));
+      filter:drop-shadow(0 0 calc(var(--glow-base)*(.35 + var(--lum)))
+                 color-mix(in srgb, var(--c) calc(45% + 55%*var(--lum)), transparent))
+             drop-shadow(0 0 calc(var(--glow-base)*(.9 + 1.6*var(--lum)))
+                 color-mix(in srgb, var(--c) calc(22% + 40%*var(--lum)), transparent));
+      transition:opacity var(--tr,var(--fade-ms)) cubic-bezier(.33,.9,.36,1),
+                 filter var(--tr,var(--fade-ms)) cubic-bezier(.33,.9,.36,1),
+                 border-color .4s ease}
+  .notch{position:absolute;top:0;left:0;width:var(--notch-w);height:var(--notch-h);
+      background:#000;border-bottom-left-radius:var(--radius);
+      border-bottom-right-radius:var(--radius);z-index:2}
+  .notchwrap.hot .halo{--tr:.5s} /* quick ramp up to bright */
+
+  /* live mode chip below notch */
+  .mode-chip{position:absolute;top:calc(var(--notch-h) + 20px);left:50%;transform:translateX(-50%);
+      display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;
+      background:rgba(30,30,33,.7);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      border:1px solid rgba(255,255,255,.08);font-size:12px;color:var(--dim);
+      font-variant-numeric:tabular-nums;white-space:nowrap;z-index:3;
+      box-shadow:0 6px 22px rgba(0,0,0,.4)}
+  .mode-chip .lamp{width:8px;height:8px;border-radius:50%;background:var(--c);
+      box-shadow:0 0 8px var(--c);transition:box-shadow .3s,background .3s}
+  .mode-chip b{color:#e9e9ea;font-weight:600;letter-spacing:.3px}
+  .mode-chip .meter{width:74px;height:4px;border-radius:3px;background:rgba(255,255,255,.1);
+      overflow:hidden;position:relative}
+  .mode-chip .meter i{position:absolute;inset:0;transform-origin:left;background:var(--c);
+      box-shadow:0 0 6px var(--c);transform:scaleX(var(--lum));
+      transition:transform var(--tr,var(--fade-ms)) cubic-bezier(.33,.9,.36,1)}
+
+  /* ---------------- control panel ---------------- */
+  .controls{padding:22px 24px 26px;background:linear-gradient(#0a0a0d,#0c0c10);
+      display:flex;flex-direction:column;gap:2px}
+  .controls h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;
+      color:var(--faint);font-weight:700}
+  .controls .lead{margin:0 0 16px;color:var(--dim);font-size:12.5px;line-height:1.55}
+  .ctl{display:flex;flex-direction:column;gap:7px;padding:11px 0;
+      border-top:1px solid rgba(255,255,255,.05)}
+  .ctl:first-of-type{border-top:none}
+  .ctl .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .ctl label{font-size:12.5px;color:#c2c2c8;font-weight:500}
+  .ctl .val{font-size:12px;color:var(--c);font-variant-numeric:tabular-nums;font-weight:600}
+  .ctl .desc{font-size:11px;color:var(--faint);line-height:1.45}
+  input[type=range]{width:100%;accent-color:var(--c);cursor:pointer;height:20px}
+  .btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+  button{background:#161619;color:var(--txt);border:1px solid #29292f;border-radius:9px;
+      padding:8px 13px;cursor:pointer;font:inherit;font-size:12.5px;letter-spacing:.1px;
+      transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .08s ease}
+  button:hover{background:#202026;border-color:#3a3a41}
+  button:active{transform:translateY(1px)}
+  button.primary{border-color:var(--c);color:#fff;box-shadow:0 0 0 1px var(--c) inset,0 0 18px -6px var(--c)}
+  button.seg{padding:7px 12px}
+  button.seg.on{border-color:var(--c);color:#fff;box-shadow:0 0 0 1px var(--c) inset}
+  .seggroup{display:inline-flex;gap:6px}
+  .note{margin-top:14px;padding:11px 13px;border-radius:11px;border:1px solid rgba(255,255,255,.06);
+      background:rgba(255,255,255,.02);color:var(--dim);font-size:11.5px;line-height:1.55}
+  .note b{color:#d4d4da;font-weight:600}
+  .note .swatch{display:inline-block;width:8px;height:8px;border-radius:50%;
+      background:var(--alert);box-shadow:0 0 7px var(--alert);vertical-align:middle;margin:0 2px}
+
+  /* ---------------- Demo 2: HUD + menu ---------------- */
+  /* the custom HUD pill (hover) */
+  .hud{position:absolute;top:0;left:0;z-index:9;pointer-events:none;
+      background:rgba(30,30,33,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+      border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:9px 16px;white-space:nowrap;
+      box-shadow:0 6px 22px rgba(0,0,0,.45);font-size:12.5px;color:#d9d9de;
+      opacity:0;transform:translateY(-4px) scale(.97);transform-origin:top center;
+      transition:opacity .16s ease,transform .2s cubic-bezier(.22,1,.32,1.06)}
+  .hud.show{opacity:1;transform:translateY(0) scale(1)}
+  .hud b{color:var(--c);font-variant-numeric:tabular-nums;font-weight:600}
+  .hud .sep{color:rgba(255,255,255,.32);margin:0 9px}
+  .hud .reset{color:rgba(255,255,255,.85);font-variant-numeric:tabular-nums}
+  .hud .wk{color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+  .hud::before{content:"";position:absolute;top:-5px;left:var(--arrow,50%);transform:translateX(-50%) rotate(45deg);
+      width:9px;height:9px;background:rgba(30,30,33,.82);border-left:1px solid rgba(255,255,255,.08);
+      border-top:1px solid rgba(255,255,255,.08)}
+
+  .led{width:11px;height:11px;border-radius:50%;background:var(--c);
+      box-shadow:0 0 7px var(--c);cursor:pointer;position:relative;
+      transition:transform .16s ease,box-shadow .3s ease,background .3s ease}
+  .led:hover{transform:scale(1.18);box-shadow:0 0 11px var(--c)}
+  .led.armed{transform:scale(1.05)}
+
+  /* dropdown menu */
+  .menu{position:absolute;top:0;left:0;width:266px;background:rgba(28,28,31,.93);
+      backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+      border:1px solid rgba(255,255,255,.09);border-radius:12px;
+      box-shadow:0 18px 40px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.05) inset;
+      padding:6px 0;z-index:12;opacity:0;transform:translateY(-6px) scale(.97);
+      transform-origin:top right;pointer-events:none;
+      transition:opacity .17s ease,transform .17s cubic-bezier(.22,1,.32,1.06);font-size:13px}
+  .menu.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+  .menu-header{padding:10px 14px 11px}
+  .menu-status{color:#e9e9ea;font-weight:600;font-size:13px}
+  .menu-status b{color:var(--c);font-variant-numeric:tabular-nums}
+  .menu-status span{color:rgba(255,255,255,.6);font-weight:400}
+  .menu-weekly{color:var(--dim);font-size:11.5px;margin-top:3px}
+  .menu-weekly b{color:#c7c7cc;font-weight:600;font-variant-numeric:tabular-nums}
+  .menu-sep{height:1px;background:rgba(255,255,255,.08);margin:5px 0}
+  .menu-section-label{padding:6px 14px 3px;color:var(--faint);font-size:11px;
+      text-transform:uppercase;letter-spacing:.4px}
+  .menu-row{display:flex;align-items:center;justify-content:space-between;
+      padding:6px 14px;cursor:pointer;color:#e2e2e6;user-select:none}
+  .menu-row:hover{background:rgba(255,255,255,.06)}
+  .menu-row.menu-sub{padding-left:24px;font-size:12.5px}
+  .menu-notif-group.notif-disabled .menu-row.menu-sub:not(.menu-master){opacity:.35;pointer-events:none}
+  .switch{width:32px;height:19px;border-radius:10px;background:#3a3a3f;position:relative;
+      flex:none;transition:background .18s}
+  .switch .knob{position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;
+      background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.4);transition:left .18s}
+  .switch.on{background:var(--c)}
+  .switch.on .knob{left:15px}
+  .menu-row.menu-update{justify-content:flex-start;gap:9px}
+  .menu-update .dot-update{width:7px;height:7px;border-radius:50%;background:#0a84ff;
+      box-shadow:0 0 6px #0a84ff;flex:none}
+  .menu-update span:not(.dot-update){color:#c7c7cc;font-size:12.5px}
+  .menu-item{padding:7px 14px;cursor:pointer;color:#e2e2e6}
+  .menu-item:hover{background:#0a84ff;color:#fff}
+
+  .badges{display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
+  .badge{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:11px;
+      border:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);font-size:12px;color:var(--dim)}
+  .badge .k{display:inline-flex;align-items:center;justify-content:center;min-width:46px;height:22px;
+      padding:0 8px;border-radius:7px;background:#18181c;border:1px solid #2c2c33;color:#d4d4da;
+      font-size:11px;font-weight:600;letter-spacing:.3px}
+  .badge b{color:#d4d4da;font-weight:600}
+
+  footer{color:var(--faint);font-size:11.5px;text-align:center;padding:8px 0 0}
+  footer code{background:#141417;padding:1px 6px;border-radius:5px;color:#b7b7bd}
+</style>
+</head>
+<body>
+  <header class="brandbar">
+    <div class="brand">
+      <span class="mark" id="brandMark"></span>
+      <span class="name">Lumos</span>
+      <small>interaction prototypes</small>
+    </div>
+    <span class="tag">felt in the browser · pre-Swift</span>
+  </header>
+
+  <div class="wrap">
+    <div class="intro">
+      <h1>Two interactions, tuned by feel.</h1>
+      <p>Lumos should be <em>present, not pushy</em>. These live prototypes let you feel the two moments
+         that decide that — how the notch glow rests and wakes, and how the menu-bar dot separates a
+         <span style="color:#c7c7cc">glance</span> from a <span style="color:#c7c7cc">control</span>.
+         Nothing here is final; every knob is here to be moved.</p>
+    </div>
+
+    <!-- ============ DEMO 1 ============ -->
+    <section class="demo">
+      <div class="demo-head">
+        <p class="eyebrow"><span class="num">1</span> Adaptive brightness · the Halo</p>
+        <h2>Dim at rest, bright on attention</h2>
+        <p>An ambient glow at full strength all day is <span class="accent">noise</span>. So the Halo
+           rests <span class="accent">dim</span> — barely there — then <span class="accent">blooms bright</span>
+           on hover or fresh activity, holds, and eases back down. Hover the notch, or drive it with the buttons,
+           and tune the resting floor, the peak, the hold and the fade until it feels right.</p>
+      </div>
+      <div class="demo-body">
+        <div class="stage" id="stage1">
+          <div class="strip">
+            <span class="glyph">􀙇</span><span class="glyph">􀋲</span><span>Sat 1:24</span>
+          </div>
+          <div class="notchwrap" id="nw1">
+            <div class="halo" id="halo1"></div>
+            <div class="notch"></div>
+          </div>
+          <div class="mode-chip">
+            <span class="lamp"></span>
+            <b id="modeText">DIM</b>
+            <span class="meter"><i></i></span>
+          </div>
+          <div class="floor-label">Hover the notch to wake the glow</div>
+        </div>
+
+        <div class="controls">
+          <h3>Tune the feel</h3>
+          <p class="lead">These are the knobs that decide whether the glow is calming or distracting.</p>
+
+          <div class="ctl">
+            <div class="top"><label>Bright hold</label><span class="val" id="holdVal">4.0 s</span></div>
+            <input type="range" id="hold" min="1" max="15" step="0.5" value="4">
+            <div class="desc">Stands in for the real ~1&nbsp;minute — kept short here so it's feelable.</div>
+          </div>
+
+          <div class="ctl">
+            <div class="top"><label>Dim level <span style="color:var(--faint)">(resting floor)</span></label><span class="val" id="dimVal">30%</span></div>
+            <input type="range" id="dim" min="0" max="70" step="1" value="30">
+            <div class="desc">The key "not too much in the eye" knob — how quiet the glow gets at rest.</div>
+          </div>
+
+          <div class="ctl">
+            <div class="top"><label>Bright level <span style="color:var(--faint)">(peak)</span></label><span class="val" id="brightVal">100%</span></div>
+            <input type="range" id="bright" min="40" max="100" step="1" value="100">
+            <div class="desc">Peak bloom intensity when it wakes.</div>
+          </div>
+
+          <div class="ctl">
+            <div class="top"><label>Fade duration</label><span class="val" id="fadeVal">1.4 s</span></div>
+            <input type="range" id="fade" min="0.3" max="4" step="0.1" value="1.4">
+            <div class="desc">How slowly bright eases back down to dim.</div>
+          </div>
+
+          <div class="ctl">
+            <div class="top"><label>State</label></div>
+            <div class="seggroup" style="margin-top:4px">
+              <button class="seg on" data-state="calm">Calm</button>
+              <button class="seg" data-state="watch">Watch</button>
+              <button class="seg" data-state="alert">Alert</button>
+            </div>
+          </div>
+
+          <div class="btnrow" style="margin-top:14px">
+            <button class="primary" id="simulate">Simulate activity</button>
+            <button id="forceBright">Force bright</button>
+            <button id="forceDim">Force dim</button>
+          </div>
+
+          <div class="note">
+            <b>Alert never fully sleeps.</b> <span class="swatch" id="alertSwatch"></span>
+            When you're near the limit, the resting floor is lifted — the glow keeps a visible ember
+            so a real warning can't fade to nothing while you're not looking.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DEMO 2 ============ -->
+    <section class="demo">
+      <div class="demo-head">
+        <p class="eyebrow"><span class="num">2</span> The menu-bar LED</p>
+        <h2>Hover to glance, click to control</h2>
+        <p><span class="accent">Hover</span> the dot and the exact numbers appear in a calm HUD, right where
+           your eye already is — no click, no window. <span class="accent">Click</span> the same dot and it
+           becomes the control surface: toggles, notifications, updates. One is <span class="accent">information</span>,
+           the other is <span class="accent">action</span> — and they never fight for the screen.</p>
+      </div>
+      <div class="demo-body">
+        <div class="stage allow-overflow" id="stage2">
+          <div class="strip">
+            <span class="led" id="led2"></span>
+            <span id="mbPct2">68%</span>
+            <span class="glyph">􀙇</span><span class="glyph">􀋲</span><span>Sat 1:24</span>
+          </div>
+
+          <!-- custom HUD (hover) -->
+          <div class="hud" id="hud2">
+            <b id="hudPct">68% used</b><span class="sep">·</span><span class="reset" id="hudReset">resets 6:05 PM</span><span class="sep">·</span><span class="wk" id="hudWk">wk 41%</span>
+          </div>
+
+          <!-- dropdown (click) -->
+          <div class="menu" id="menu2">
+            <div class="menu-header">
+              <div class="menu-status"><b id="menuPct">68% used</b><span id="menuReset"> · resets 6:05 PM</span></div>
+              <div class="menu-weekly">Weekly: <b id="menuWeekly">41%</b></div>
+            </div>
+            <div class="menu-sep"></div>
+            <div class="menu-row" data-toggle="notchGlow"><span>Notch glow</span><span class="switch on"><span class="knob"></span></span></div>
+            <div class="menu-row" data-toggle="menuLed"><span>Menu-bar LED</span><span class="switch on"><span class="knob"></span></span></div>
+            <div class="menu-row" data-toggle="showPct"><span>Show % text</span><span class="switch on"><span class="knob"></span></span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-section-label">Notifications</div>
+            <div class="menu-notif-group" id="notifGroup">
+              <div class="menu-row menu-sub" data-toggle="notifContext"><span>Context warnings</span><span class="switch on"><span class="knob"></span></span></div>
+              <div class="menu-row menu-sub" data-toggle="notifTiming"><span>Timing suggestions</span><span class="switch on"><span class="knob"></span></span></div>
+              <div class="menu-row menu-sub" data-toggle="notifTips"><span>Pro tips</span><span class="switch"><span class="knob"></span></span></div>
+              <div class="menu-row menu-sub" data-toggle="quietHours"><span>Quiet hours</span><span class="switch"><span class="knob"></span></span></div>
+              <div class="menu-row menu-sub menu-master" data-toggle="notifOff"><span>Notifications off</span><span class="switch"><span class="knob"></span></span></div>
+            </div>
+            <div class="menu-sep"></div>
+            <div class="menu-row menu-update" id="menuUpdate"><span class="dot-update"></span><span>Update available (v1.1)</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-row" data-toggle="launchLogin"><span>Launch at login</span><span class="switch"><span class="knob"></span></span></div>
+            <div class="menu-item" id="menuAbout">About Lumos</div>
+            <div class="menu-item" id="menuQuit">Quit</div>
+          </div>
+
+          <div class="floor-label" id="floor2">Hover the dot for the glance · click it for the menu</div>
+        </div>
+
+        <div class="controls">
+          <h3>The interaction model</h3>
+          <p class="lead">Same target, two intents — kept unambiguous.</p>
+
+          <div class="badges">
+            <div class="badge"><span class="k">Hover</span><span>glance the exact numbers · <b>HUD</b></span></div>
+            <div class="badge"><span class="k">Click</span><span>open the actionable <b>menu</b></span></div>
+          </div>
+
+          <div class="ctl" style="margin-top:8px">
+            <div class="top"><label>Drive it from here</label></div>
+            <div class="btnrow" style="margin-top:8px">
+              <button id="peekHud">Peek HUD</button>
+              <button id="openMenu">Open menu ▾</button>
+            </div>
+          </div>
+
+          <div class="ctl">
+            <div class="top"><label>LED state <span style="color:var(--faint)">(colour)</span></label></div>
+            <div class="seggroup" style="margin-top:6px">
+              <button class="seg" data-state2="calm">Calm</button>
+              <button class="seg on" data-state2="watch">Watch</button>
+              <button class="seg" data-state2="alert">Alert</button>
+            </div>
+          </div>
+
+          <div class="note">
+            <b>Clicking dismisses the glance.</b> The hover HUD and the menu are mutually exclusive —
+            a click hides the HUD and opens the menu, so the two never overlap. Click outside to close.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Lexicon — <code>Halo</code> ring · <code>Bloom</code> glow · <code>Readout / HUD</code> pill ·
+      <code>LED</code> menu-bar dot · states <code>Calm / Watch / Alert</code>. Self-contained · offline.
+    </footer>
+  </div>
+
+<script>
+  const root=document.documentElement;
+  const stateColor={calm:'var(--calm)',watch:'var(--watch)',alert:'var(--alert)'};
+
+  /* ============================================================
+     DEMO 1 — adaptive brightness
+     ============================================================ */
+  const nw1=document.getElementById('nw1'),
+        halo1=document.getElementById('halo1'),
+        modeText=document.getElementById('modeText'),
+        stage1=document.getElementById('stage1');
+
+  let cfg={hold:4000,dim:0.30,bright:1.0,fadeMs:1400};
+  let d1State='calm';
+  let holdTimer=null, fadeTimer=null, forcedDim=false;
+
+  // resting floor: Alert lifts the floor so a near-limit glow keeps an ember
+  function restingFloor(){
+    return d1State==='alert' ? Math.max(cfg.dim, 0.42) : cfg.dim;
+  }
+  function setLum(v,ms){
+    root.style.setProperty('--lum', v.toFixed(3));
+    root.style.setProperty('--tr', (ms/1000)+'s');
+  }
+  function setMode(txt){ modeText.textContent=txt; }
+
+  function toDim(){
+    forcedDim=false;
+    const floor=restingFloor();
+    setLum(floor, cfg.fadeMs);
+    nw1.classList.remove('hot');
+    setMode('dimming…');
+    clearTimeout(fadeTimer);
+    fadeTimer=setTimeout(()=>{ if(!nw1.classList.contains('hot')) setMode('DIM'); }, cfg.fadeMs);
+  }
+  function toBright(){
+    clearTimeout(holdTimer); clearTimeout(fadeTimer); forcedDim=false;
+    nw1.classList.add('hot');
+    setLum(cfg.bright, 500);
+    setMode('BRIGHT');
+  }
+  // wake = bloom bright, hold, then ease to dim
+  function wake(){
+    toBright();
+    holdTimer=setTimeout(toDim, cfg.hold);
+  }
+  function forceDim(){
+    clearTimeout(holdTimer); clearTimeout(fadeTimer);
+    forcedDim=true; nw1.classList.remove('hot');
+    setLum(restingFloor(), cfg.fadeMs);
+    setMode('DIM');
+  }
+  function forceBright(){
+    clearTimeout(holdTimer); clearTimeout(fadeTimer);
+    nw1.classList.add('hot'); setLum(cfg.bright,500); setMode('BRIGHT (held)');
+  }
+
+  nw1.addEventListener('mouseenter', wake);
+  nw1.addEventListener('mouseleave', ()=>{ /* let the hold timer run out naturally */ });
+
+  document.getElementById('simulate').onclick=wake;
+  document.getElementById('forceBright').onclick=forceBright;
+  document.getElementById('forceDim').onclick=forceDim;
+
+  // sliders
+  const holdEl=document.getElementById('hold'), holdVal=document.getElementById('holdVal'),
+        dimEl=document.getElementById('dim'), dimVal=document.getElementById('dimVal'),
+        brightEl=document.getElementById('bright'), brightVal=document.getElementById('brightVal'),
+        fadeEl=document.getElementById('fade'), fadeVal=document.getElementById('fadeVal');
+
+  holdEl.oninput=e=>{ cfg.hold=parseFloat(e.target.value)*1000; holdVal.textContent=parseFloat(e.target.value).toFixed(1)+' s'; };
+  dimEl.oninput=e=>{ cfg.dim=parseInt(e.target.value)/100; dimVal.textContent=e.target.value+'%';
+      if(!nw1.classList.contains('hot')) setLum(restingFloor(), 400); };
+  brightEl.oninput=e=>{ cfg.bright=parseInt(e.target.value)/100; brightVal.textContent=e.target.value+'%';
+      if(nw1.classList.contains('hot')) setLum(cfg.bright,300); };
+  fadeEl.oninput=e=>{ cfg.fadeMs=parseFloat(e.target.value)*1000; fadeVal.textContent=parseFloat(e.target.value).toFixed(1)+' s';
+      root.style.setProperty('--fade-ms', cfg.fadeMs+'ms'); };
+
+  // state switch (color) for demo 1
+  document.querySelectorAll('[data-state]').forEach(b=>{
+    b.onclick=()=>{
+      d1State=b.dataset.state;
+      root.style.setProperty('--c', stateColor[d1State]);
+      document.querySelectorAll('[data-state]').forEach(x=>x.classList.toggle('on',x===b));
+      // reapply resting floor if currently at rest
+      if(!nw1.classList.contains('hot')) setLum(restingFloor(), 400);
+    };
+  });
+
+  // init demo 1 at rest
+  root.style.setProperty('--fade-ms', cfg.fadeMs+'ms');
+  setLum(restingFloor(), 0);
+  setMode('DIM');
+
+  /* ============================================================
+     DEMO 2 — hover HUD + click menu
+     ============================================================ */
+  const stage2=document.getElementById('stage2'),
+        led2=document.getElementById('led2'),
+        hud2=document.getElementById('hud2'),
+        menu2=document.getElementById('menu2'),
+        mbPct2=document.getElementById('mbPct2'),
+        floor2=document.getElementById('floor2');
+
+  const d2states={
+    calm:{c:'var(--calm)',pct:'12% used',reset:'resets 8:30 PM',wk:'wk 18%',mb:'12%'},
+    watch:{c:'var(--watch)',pct:'68% used',reset:'resets 6:05 PM',wk:'wk 41%',mb:'68%'},
+    alert:{c:'var(--alert)',pct:'92% used',reset:'resets 7:40 PM',wk:'wk 77%',mb:'92%'}
+  };
+  let d2='watch';
+
+  function applyD2(){
+    const s=d2states[d2];
+    // scope color to demo-2 stage via inline var on stage2
+    stage2.style.setProperty('--c', s.c);
+    hud2.style.setProperty('--c', s.c); menu2.style.setProperty('--c', s.c);
+    document.getElementById('hudPct').textContent=s.pct;
+    document.getElementById('hudReset').textContent=s.reset;
+    document.getElementById('hudWk').textContent=s.wk;
+    document.getElementById('menuPct').textContent=s.pct;
+    document.getElementById('menuReset').textContent=' · '+s.reset;
+    document.getElementById('menuWeekly').textContent=s.wk.replace('wk ','');
+    mbPct2.textContent=s.mb;
+  }
+  // scope --c overrides: set on the led/strip elements too
+  led2.style.color='';
+
+  document.querySelectorAll('[data-state2]').forEach(b=>{
+    b.onclick=()=>{
+      d2=b.dataset.state2;
+      document.querySelectorAll('[data-state2]').forEach(x=>x.classList.toggle('on',x===b));
+      applyD2();
+    };
+  });
+
+  function positionHud(){
+    const stageR=stage2.getBoundingClientRect(), ledR=led2.getBoundingClientRect();
+    hud2.style.visibility='hidden'; hud2.classList.add('show');
+    const w=hud2.offsetWidth;
+    hud2.classList.remove('show'); hud2.style.visibility='';
+    const ledCx=ledR.left-stageR.left+ledR.width/2;
+    let left=ledCx-w/2;
+    left=Math.max(8, Math.min(left, stageR.width-w-8));
+    hud2.style.left=left+'px';
+    hud2.style.top=(ledR.bottom-stageR.top+9)+'px';
+    hud2.style.setProperty('--arrow',(ledCx-left)+'px');
+  }
+  function showHud(){ if(menu2.classList.contains('open')) return; positionHud(); hud2.classList.add('show'); }
+  function hideHud(){ hud2.classList.remove('show'); }
+
+  led2.addEventListener('mouseenter', showHud);
+  led2.addEventListener('mouseleave', hideHud);
+  hud2.addEventListener('mouseenter', ()=>{}); // pill is pointer-events:none anyway
+
+  function positionMenu(){
+    const stageR=stage2.getBoundingClientRect(), ledR=led2.getBoundingClientRect();
+    const w=266;
+    let left=ledR.left-stageR.left+ledR.width/2-w/2;
+    left=Math.max(8, Math.min(left, stageR.width-w-8));
+    menu2.style.left=left+'px';
+    menu2.style.top=(ledR.bottom-stageR.top+9)+'px';
+    menu2.style.transformOrigin='top center';
+  }
+  function toggleMenu(force){
+    const open=force!==undefined?force:!menu2.classList.contains('open');
+    if(open){ hideHud(); positionMenu(); }
+    menu2.classList.toggle('open',open);
+    led2.classList.toggle('armed',open);
+  }
+  led2.addEventListener('click',e=>{ e.stopPropagation(); toggleMenu(); });
+  document.getElementById('openMenu').onclick=()=>toggleMenu(true);
+  document.getElementById('peekHud').onclick=()=>{
+    toggleMenu(false);
+    positionHud(); hud2.classList.add('show');
+    clearTimeout(peekTimer); peekTimer=setTimeout(hideHud,1800);
+  };
+  let peekTimer=null;
+
+  document.addEventListener('click',e=>{
+    if(menu2.classList.contains('open') && !menu2.contains(e.target) && e.target!==led2) toggleMenu(false);
+  });
+
+  // menu toggle rows
+  document.querySelectorAll('#menu2 .menu-row[data-toggle]').forEach(row=>{
+    row.onclick=()=>{
+      const sw=row.querySelector('.switch'), on=sw.classList.toggle('on'), key=row.dataset.toggle;
+      if(key==='menuLed') led2.style.visibility=on?'visible':'hidden';
+      if(key==='showPct') mbPct2.style.visibility=on?'visible':'hidden';
+      if(key==='notifOff') document.getElementById('notifGroup').classList.toggle('notif-disabled',on);
+    };
+  });
+  document.getElementById('menuAbout').onclick=()=>toggleMenu(false);
+  document.getElementById('menuQuit').onclick=()=>toggleMenu(false);
+
+  applyD2();
+</script>
+</body>
+</html>
