@@ -33,11 +33,11 @@
 	<!-- PLACEHOLDER: bump per tagged release; assemble-app.sh / the Homebrew formula should
 	     keep this in sync with the git tag (e.g. via sed at build time). -->
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>0.1.1</string>
 
 	<!-- PLACEHOLDER: build number; bump alongside CFBundleShortVersionString. -->
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright (c) 2026 The Lumos authors. MIT License.</string>
