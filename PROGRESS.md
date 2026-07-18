@@ -4,7 +4,21 @@
 > meaningful chunk of work (see the "Living docs" rule in [`CLAUDE.md`](./CLAUDE.md)).
 > Companion to [`PLAN.md`](./PLAN.md) (the plan) and [`DECISIONS.md`](./DECISIONS.md) (the locks).
 >
-> **Last updated:** 2026-07-18 (v0.1.1 shipped to Homebrew — stale-on-hover fix + freshness policy + legibility)
+> **Last updated:** 2026-07-18 (v0.1.2 — prebuilt universal binary distribution; kills the CLT/compile wall)
+
+## 2026-07-18 (latest) — Distribution switched to a prebuilt universal binary (v0.1.2)
+
+- **Killed the compile/CLT friction.** `brew install` was failing on macOS 26 + old CLT because
+  Homebrew refuses to compile a source formula against a lagging toolchain. Default install is now
+  a **prebuilt, ad-hoc-signed universal `Lumos.app`** (arm64 + x86_64, macOS 13 floor) from the
+  GitHub Release — no compiler / CLT / Xcode needed, works on all macOS 13+.
+- **Gatekeeper-free confirmed on real hardware:** brew formula installs are non-quarantined + the
+  binary is ad-hoc signed → `open Lumos.app` launches with no "unidentified developer" prompt.
+- **New `scripts/release.sh`** builds both slices via per-arch cross-compile (CLT-only friendly, no
+  xcbuild), lipo-fuses, assembles + signs the .app, emits `dist/Lumos-<v>-universal.tar.gz` + sha.
+- **`brew install --HEAD`** still compiles from source as a fallback.
+- Docs updated: DISTRIBUTION.md rewritten honestly (formula-not-cask quarantine distinction);
+  DECISIONS.md logs the reversal of the source-only lock.
 
 ## 2026-07-18 (latest) — Hover now reflects stale instantly + review-fix batch
 

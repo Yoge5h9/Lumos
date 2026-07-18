@@ -5,6 +5,28 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — Distribution: prebuilt universal binary (reverses "source-only")
+
+- **Reversed the build-from-source lock.** Homebrew hard-refuses to compile a source formula
+  when the user's Command Line Tools lag the running macOS (hit live: macOS 26 + CLT 16.4 →
+  "Command Line Tools are too outdated"). Requiring a multi-GB CLT update before first use fails
+  the "effortless to install" bar, so the default install is now a **prebuilt, ad-hoc-signed
+  universal `Lumos.app`** (arm64 + x86_64, macOS 13 floor) downloaded from the GitHub Release.
+  No compiler / CLT / Xcode on the user's machine.
+- **Still Gatekeeper-free, still no Apple account.** A Homebrew *formula* installs without the
+  `com.apple.quarantine` xattr, and Gatekeeper only blocks quarantined files; an ad-hoc signature
+  is enough to run. **Verified on real Apple-Silicon hardware:** the extracted app has no
+  quarantine xattr and `open Lumos.app` launches clean (no prompt) even though `spctl -a` rejects
+  it in the abstract. This corrects the old DISTRIBUTION.md claim that any prebuilt binary "would
+  get flagged" — that's true for a **cask**, not a formula-hosted binary.
+- **Build pipeline:** `scripts/release.sh` builds both slices via per-arch `-target`
+  cross-compile (NOT `swift build --arch …`, which needs full Xcode/xcbuild), `lipo`-fuses them,
+  assembles + ad-hoc-signs `Lumos.app`, and emits `dist/Lumos-<v>-universal.tar.gz` + sha256.
+- **`brew install --HEAD` still compiles from `main`** — the source path is kept as a fallback.
+- **Trade-offs accepted:** we now own release-engineering correctness (arch + min-OS + bundling),
+  it's ineligible for homebrew-core (bottles would be needed), and MDM-locked Macs may still
+  refuse a non-notarized app. See DISTRIBUTION.md "Concerns".
+
 ## 2026-07-18 — v0.1.1 published to Homebrew
 
 - **Released v0.1.1.** Version bumped in `Info.plist` (0.1.1 / build 2), tagged `v0.1.1` + pushed;

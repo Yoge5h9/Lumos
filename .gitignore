@@ -6,8 +6,12 @@ Icon?
 
 # Swift Package Manager / build output
 .build/
+.build-*/
 .swiftpm/
 Packages/
+
+# Release artifacts (built by scripts/release.sh; uploaded to GitHub Releases)
+dist/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 
