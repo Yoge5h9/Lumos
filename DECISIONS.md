@@ -19,9 +19,18 @@
   quarantine xattr and `open Lumos.app` launches clean (no prompt) even though `spctl -a` rejects
   it in the abstract. This corrects the old DISTRIBUTION.md claim that any prebuilt binary "would
   get flagged" — that's true for a **cask**, not a formula-hosted binary.
+- **Shipped as a Homebrew bottle, not just a prebuilt `url`.** Discovered while testing: a plain
+  formula with a prebuilt binary `url` STILL trips the CLT gate, because Homebrew runs
+  `perform_build_from_source_checks` on any non-bottle install (`FormulaInstaller#install`:
+  `pour_bottle?` picks the lenient bottle check vs the fatal source check). Only **pouring a
+  bottle** skips it. So the formula carries `bottle do … sha256 cellar: :any_skip_relocation,
+  all: "…" end` — `all` (one universal bottle for every macOS 13+) + `skip_relocation` (pour needs
+  no developer tools; the binary is Cellar-relative-free). **Verified:** `brew install` pours with
+  zero CLT complaint on a Mac with CLT far behind the OS.
 - **Build pipeline:** `scripts/release.sh` builds both slices via per-arch `-target`
   cross-compile (NOT `swift build --arch …`, which needs full Xcode/xcbuild), `lipo`-fuses them,
-  assembles + ad-hoc-signs `Lumos.app`, and emits `dist/Lumos-<v>-universal.tar.gz` + sha256.
+  assembles + ad-hoc-signs `Lumos.app`, and emits both `dist/Lumos-<v>-universal.tar.gz` (plain)
+  and `dist/lumos-<v>.all.bottle.tar.gz` (the brew bottle) + their sha256s.
 - **`brew install --HEAD` still compiles from `main`** — the source path is kept as a fallback.
 - **Trade-offs accepted:** we now own release-engineering correctness (arch + min-OS + bundling),
   it's ineligible for homebrew-core (bottles would be needed), and MDM-locked Macs may still

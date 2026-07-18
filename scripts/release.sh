@@ -99,8 +99,32 @@ tar -C "${STAGE}" -czf "${TARBALL}" "${APP_NAME}.app"
 SHA="$(shasum -a 256 "${TARBALL}" | awk '{print $1}')"
 echo "${SHA}" > "${TARBALL}.sha256"
 
+# --- 5. homebrew bottle (:all, skip_relocation) --------------------------
+# This is what actually removes the compile/CLT wall for users. Homebrew runs
+# its "Command Line Tools too outdated" gate ONLY on the build-from-source path;
+# pouring a bottle skips it, and a skip_relocation bottle (valid here — the
+# binary is standalone, nothing Cellar-relative) needs no developer tools at
+# all. The keg layout mirrors what `def install` would produce: Lumos.app + a
+# bin/lumos symlink. (brew writes .brew/ and INSTALL_RECEIPT.json on pour.)
+echo "==> Building Homebrew bottle..."
+KEG="${STAGE}/bottle/${EXECUTABLE_NAME}/${VERSION}"
+mkdir -p "${KEG}/bin"
+cp -R "${APP_BUNDLE}" "${KEG}/${APP_NAME}.app"
+ln -s "../${APP_NAME}.app/Contents/MacOS/${EXECUTABLE_NAME}" "${KEG}/bin/${EXECUTABLE_NAME}"
+BOTTLE="${DIST_DIR}/${EXECUTABLE_NAME}-${VERSION}.all.bottle.tar.gz"
+tar -C "${STAGE}/bottle" -czf "${BOTTLE}" "${EXECUTABLE_NAME}"
+BSHA="$(shasum -a 256 "${BOTTLE}" | awk '{print $1}')"
+echo "${BSHA}" > "${BOTTLE}.sha256"
+
 echo
-echo "==> Release artifact ready:"
-echo "    file:   ${TARBALL}"
-echo "    size:   $(du -h "${TARBALL}" | awk '{print $1}')"
-echo "    sha256: ${SHA}"
+echo "==> Release artifacts ready in ${DIST_DIR}:"
+echo "    plain tarball:  $(basename "${TARBALL}")  ($(du -h "${TARBALL}" | awk '{print $1}'))"
+echo "      sha256: ${SHA}"
+echo "    brew bottle:    $(basename "${BOTTLE}")  ($(du -h "${BOTTLE}" | awk '{print $1}'))"
+echo "      sha256: ${BSHA}"
+echo
+echo "==> Paste into the formula's bottle block (root_url = the v${VERSION} release):"
+echo "    sha256 cellar: :any_skip_relocation, all: \"${BSHA}\""
+echo
+echo "==> Upload both to the GitHub Release, e.g.:"
+echo "    gh release create v${VERSION} \"${TARBALL}\" \"${BOTTLE}\" --repo <owner>/<repo> --title \"Lumos v${VERSION}\""

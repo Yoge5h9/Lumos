@@ -29,10 +29,19 @@ There is a small CLI helper — `lumos setup` and the status-line wrapper — bu
 
 - We publish a **tap** (a GitHub repo, `homebrew-lumos`) with a **formula** (`lumos.rb`).
 - Install: `brew install <you>/lumos/lumos` → then `lumos setup`.
-- The formula **downloads a prebuilt, ad-hoc-signed universal `Lumos.app`** (one artifact
-  covers Apple Silicon + Intel, macOS 13+) built by `scripts/release.sh` and attached to the
-  GitHub Release. **No compiler, no Command Line Tools, no Xcode** needed on the user's
-  machine — install is a few-second download+extract on any supported macOS.
+- The formula ships the prebuilt, ad-hoc-signed universal `Lumos.app` (one artifact covers
+  Apple Silicon + Intel, macOS 13+) as a **Homebrew bottle** — built by `scripts/release.sh`
+  and attached to the GitHub Release. **No compiler, no Command Line Tools, no Xcode** needed
+  on the user's machine — install is a few-second download+extract on any supported macOS.
+- **Why a bottle specifically (not just a prebuilt `url` in the formula):** Homebrew runs its
+  "Command Line Tools too outdated" gate on the **build-from-source path only**
+  (`FormulaInstaller#install`: `pour_bottle?` → skip it, else `perform_build_from_source_checks`).
+  A plain formula with a prebuilt `url` is still classified as source-install, so it trips the
+  gate *before* reaching the download step (learned the hard way). A **bottle** pours instead of
+  builds → the gate is skipped. We tag it `sha256 cellar: :any_skip_relocation, all: "…"`: `all`
+  = one bottle for every macOS (our binary is universal + min-OS 13), and `skip_relocation` means
+  the pour needs no `codesign`/developer tools at all (the binary references nothing Cellar-relative).
+  Verified live: `brew install` pours cleanly on a Mac whose CLT is far behind the OS.
 - **Still Gatekeeper-free, still no $99/yr Apple account.** A Homebrew *formula* installs into
   the Cellar **without** the `com.apple.quarantine` xattr, and Gatekeeper's blocking prompt
   only fires on quarantined files. An ad-hoc signature (which `codesign -s -` provides, enough

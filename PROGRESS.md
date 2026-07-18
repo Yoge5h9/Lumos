@@ -14,8 +14,13 @@
   GitHub Release — no compiler / CLT / Xcode needed, works on all macOS 13+.
 - **Gatekeeper-free confirmed on real hardware:** brew formula installs are non-quarantined + the
   binary is ad-hoc signed → `open Lumos.app` launches with no "unidentified developer" prompt.
+- **Shipped as a `:all` skip-relocation Homebrew bottle** — a plain prebuilt `url` still trips
+  brew's CLT gate (source-install preflight); only pouring a bottle skips it. **Verified: `brew
+  install yoge5h9/lumos/lumos` pours + installs cleanly on this old-CLT Mac** (universal binary
+  on PATH, `lumos diagnose` runs).
 - **New `scripts/release.sh`** builds both slices via per-arch cross-compile (CLT-only friendly, no
-  xcbuild), lipo-fuses, assembles + signs the .app, emits `dist/Lumos-<v>-universal.tar.gz` + sha.
+  xcbuild), lipo-fuses, assembles + signs the .app, and emits both the plain tarball and the brew
+  bottle + shas.
 - **`brew install --HEAD`** still compiles from source as a fallback.
 - Docs updated: DISTRIBUTION.md rewritten honestly (formula-not-cask quarantine distinction);
   DECISIONS.md logs the reversal of the source-only lock.
