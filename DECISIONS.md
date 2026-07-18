@@ -5,6 +5,22 @@
 > entry rather than silently rewriting history. Companion to [`PRODUCT.md`](./PRODUCT.md)
 > (the "why") and [`PLAN.md`](./PLAN.md) (the "how/when").
 
+## 2026-07-18 — Watch the cache directory; no launch-time notifications (v0.1.3)
+
+- **The cache watch is armed on the directory, not just the file.** A file-only `open(…, O_EVTONLY)`
+  vnode watch can't be armed before the file exists — which is the norm right after `lumos setup`
+  (the app launches before the first Claude Code tick creates the cache). That left the notch/LED
+  stuck on "waiting" until the 60s coarse tick. Lumos now watches the cache **directory** (fires on
+  file creation + atomic temp→rename replacement) plus the file (in-place writes), and creates the
+  cache dir at launch, so usage reflects in ~0.1s across every post-setup state.
+- **No notification is ever a launch greeting.** The launch/display-wake `recompute` no longer
+  delivers notifications, and delivery is gated on `onboardingSeen`. A fresh setup shows only the
+  Lumos info page; tips arise later from genuine in-session activity. Rationale: the calm principle
+  ("never nags or pops uninvited") — a pill at launch is exactly the uninvited pop we forbid.
+- **Regression coverage:** `LiveUpdateTests.swift` (freshness/aggregate transitions) + a runnable
+  `scripts/test-live-update.sh` integration test driving the real binary against a sandbox via a
+  production-off `LUMOS_STATE_LOG` seam (no-op unless the env var is set).
+
 ## 2026-07-18 — Distribution: prebuilt universal binary (reverses "source-only")
 
 - **Reversed the build-from-source lock.** Homebrew hard-refuses to compile a source formula

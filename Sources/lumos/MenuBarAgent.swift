@@ -2,6 +2,34 @@
 import AppKit
 import LumosCore
 
+/// Optional headless-observability seam. When the environment variable
+/// `LUMOS_STATE_LOG` names a path, every paint appends one line describing what was
+/// rendered (`<epoch> freshness=<x> state=<y> used=<z>`) so an integration test can
+/// watch the running app react to cache writes. Unset in normal use, this is a pure
+/// no-op with no behavioral effect — the env is read once at launch.
+enum StateLog {
+    private static let url: URL? = {
+        guard let path = ProcessInfo.processInfo.environment["LUMOS_STATE_LOG"], !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path)
+    }()
+
+    static func record(freshness: Freshness, state: UsageState, aggregate: CacheAggregate) {
+        guard let url else { return }
+        let used = aggregate.latestSnapshot?.fiveHour?.usedPercentage.map { String($0) } ?? "nil"
+        let line = "\(Date().timeIntervalSince1970) freshness=\(freshness) state=\(state) used=\(used)\n"
+        guard let data = line.data(using: .utf8) else { return }
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        guard let handle = try? FileHandle(forWritingTo: url) else { return }
+        handle.seekToEndOfFile()
+        handle.write(data)
+        try? handle.close()
+    }
+}
+
 /// Entry point for the GUI: builds an `NSApplication` as a menu-bar-only agent
 /// (no dock icon) and runs its event loop. Called from `main.swift` when the
 /// binary is invoked with no CLI subcommand.
@@ -54,10 +82,17 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
 
     // MARK: - Lightweight scheduling (DECISIONS.md "zero idle overhead")
 
-    /// Event-driven cache reads: a vnode monitor on the cache file wakes the
-    /// pipeline only when the data actually changes, instead of a tight poll.
-    private var cacheSource: DispatchSourceFileSystemObject?
-    private var cacheWatchDescriptor: Int32 = -1
+    /// Event-driven cache reads: vnode monitors wake the pipeline only when the
+    /// data actually changes, instead of a tight poll. Two watches cooperate: a
+    /// watch on the cache *directory* fires when the file is first created or
+    /// atomically replaced (a new inode linked in), which is the only signal the
+    /// file watch alone cannot see; a watch on the cache *file* fires on in-place
+    /// writes to the current inode. Either one triggers the same debounced
+    /// recompute, so first-data-after-launch and every later write both land live.
+    private var cacheFileSource: DispatchSourceFileSystemObject?
+    private var cacheFileDescriptor: Int32 = -1
+    private var cacheDirSource: DispatchSourceFileSystemObject?
+    private var cacheDirDescriptor: Int32 = -1
     private var watchDebounce: DispatchWorkItem?
 
     /// A COARSE, tolerance-relaxed tick — not a sub-minute busy loop — that drives
@@ -144,7 +179,10 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         case .wake: includeTiming = true
         case .coarseTick: includeTiming = coarseTickCount % Self.timingPollEveryNTicks == 0
         }
-        pollNotifications(cache: cache, now: now, includeTiming: includeTiming)
+        // A launch/wake pass primes the timing histogram but never greets the user
+        // with a notification — a pill may only arise from genuine in-session
+        // activity (a later cache-change or coarse tick), never as a startup event.
+        pollNotifications(cache: cache, now: now, includeTiming: includeTiming, mayDeliver: source != .wake)
     }
 
     /// Re-render LED + Halo from the current cache without recording a burn sample
@@ -178,6 +216,7 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
         renderLED(state: state, freshness: effectiveFreshness, aggregate: aggregate, now: now)
         notchController.update(state: state, freshness: effectiveFreshness, aggregate: aggregate,
                                masterOff: settings.masterOff)
+        StateLog.record(freshness: effectiveFreshness, state: state, aggregate: aggregate)
     }
 
     /// The LED image + optional "% text" the status item shows. Skipped entirely
@@ -244,13 +283,17 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     /// Runs the calm-contract engine and, if a notification is due, renders it as
     /// a pill. Context rides every recompute (cheap — no file read); Timing/Tip
     /// only need the timing histogram, which is refreshed on the coarse cadence.
-    private func pollNotifications(cache: LumosCache, now: Date, includeTiming: Bool) {
+    private func pollNotifications(cache: LumosCache, now: Date, includeTiming: Bool, mayDeliver: Bool) {
         guard !settings.masterOff else { return }
 
         if includeTiming || cachedTiming == nil {
             cachedTiming = TimingAnalyzer.analyze(historyFile: LumosPaths.historyFile())
         }
         guard let timing = cachedTiming else { return }
+
+        // Nothing surfaces until the user has dismissed onboarding, and never on a
+        // pass that only refreshes the timing histogram (launch/wake catch-up).
+        guard mayDeliver, settings.onboardingSeen else { return }
 
         let signal = UsageSignal.fromCache(cache, now: now)
         guard let due = notificationEngine.poll(now: now, signal: signal, timing: timing) else { return }
@@ -352,10 +395,68 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
     // MARK: - Cache file watch
 
     private func startCacheWatch() {
-        guard cacheSource == nil else { return }
-        let path = LumosPaths.cacheFile().path
-        let descriptor = open(path, O_EVTONLY)
-        guard descriptor >= 0 else { return } // file not there yet — the coarse tick retries
+        // The cache dir is Lumos' own (`~/.claude/lumos`); creating it early is
+        // idempotent and lets the directory watch arm before the first status-line
+        // write, so the very first data after a fresh setup is seen live rather
+        // than waiting for a coarse tick.
+        try? FileManager.default.createDirectory(
+            at: LumosPaths.cacheDir(), withIntermediateDirectories: true
+        )
+        armCacheDirWatch()
+        armCacheFileWatch()
+    }
+
+    private func stopCacheWatch() {
+        watchDebounce?.cancel()
+        watchDebounce = nil
+        cacheDirSource?.cancel() // cancel handler closes the descriptor
+        cacheDirSource = nil
+        cacheDirDescriptor = -1
+        cacheFileSource?.cancel()
+        cacheFileSource = nil
+        cacheFileDescriptor = -1
+    }
+
+    /// Watch the cache directory so a file created or atomically replaced inside it
+    /// (the status line's normal write path) is seen immediately — the file watch
+    /// alone can't observe a create or a new inode.
+    private func armCacheDirWatch() {
+        guard cacheDirSource == nil else { return }
+        let descriptor = open(LumosPaths.cacheDir().path, O_EVTONLY)
+        guard descriptor >= 0 else { return }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: [.write, .delete, .rename, .revoke],
+            queue: .main
+        )
+        source.setEventHandler { [weak self, weak source] in
+            guard let self, let source else { return }
+            let flags = source.data
+            if !flags.isDisjoint(with: [.delete, .rename, .revoke]) {
+                // The directory itself vanished (or was replaced) — rebuild both
+                // watches from scratch once it's back.
+                self.rearmCacheWatch()
+            } else {
+                // Contents changed: a create or atomic replace landed. Track the
+                // (possibly new) inode with the file watch, then recompute.
+                self.armCacheFileWatch()
+                self.scheduleCacheChanged()
+            }
+        }
+        source.setCancelHandler { close(descriptor) }
+        cacheDirSource = source
+        cacheDirDescriptor = descriptor
+        source.resume()
+    }
+
+    /// Watch the cache file for in-place writes to the current inode. Absent when
+    /// the file doesn't exist yet — the directory watch arms this the moment it
+    /// appears.
+    private func armCacheFileWatch() {
+        guard cacheFileSource == nil else { return }
+        let descriptor = open(LumosPaths.cacheFile().path, O_EVTONLY)
+        guard descriptor >= 0 else { return }
 
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: descriptor,
@@ -366,26 +467,28 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
             guard let self, let source else { return }
             let flags = source.data
             if !flags.isDisjoint(with: [.delete, .rename, .revoke]) {
-                // Atomic replace: `AtomicFile` renames a temp over the cache, so our
-                // descriptor now points at the old, unlinked inode — re-arm on the
-                // replacement file.
-                self.rearmCacheWatch()
+                // Atomic replace unlinked our inode. Drop this watch and re-arm on
+                // the replacement so later in-place writes to it stay observable;
+                // the directory watch already carries the recompute for this event.
+                self.dropCacheFileWatch()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                    guard let self, !self.isPaused else { return }
+                    self.armCacheFileWatch()
+                }
             } else {
                 self.scheduleCacheChanged()
             }
         }
         source.setCancelHandler { close(descriptor) }
-        cacheSource = source
-        cacheWatchDescriptor = descriptor
+        cacheFileSource = source
+        cacheFileDescriptor = descriptor
         source.resume()
     }
 
-    private func stopCacheWatch() {
-        watchDebounce?.cancel()
-        watchDebounce = nil
-        cacheSource?.cancel() // cancel handler closes the descriptor
-        cacheSource = nil
-        cacheWatchDescriptor = -1
+    private func dropCacheFileWatch() {
+        cacheFileSource?.cancel()
+        cacheFileSource = nil
+        cacheFileDescriptor = -1
     }
 
     private func rearmCacheWatch() {
@@ -413,8 +516,9 @@ final class MenuBarAgentDelegate: NSObject, NSApplicationDelegate, NSMenuDelegat
             guard let self else { return }
             self.coarseTickCount &+= 1
             self.recompute(source: .coarseTick)
-            // Pick up a cache file that didn't exist at launch (Lumos not wired yet).
-            if self.cacheSource == nil { self.startCacheWatch() }
+            // Guaranteed fallback: re-arm the watches if the directory one ever
+            // dropped (e.g. the cache dir was removed and not yet recreated).
+            if self.cacheDirSource == nil { self.startCacheWatch() }
         }
         timer.tolerance = Self.coarseTickInterval * 0.2
         RunLoop.main.add(timer, forMode: .common)

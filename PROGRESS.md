@@ -4,7 +4,27 @@
 > meaningful chunk of work (see the "Living docs" rule in [`CLAUDE.md`](./CLAUDE.md)).
 > Companion to [`PLAN.md`](./PLAN.md) (the plan) and [`DECISIONS.md`](./DECISIONS.md) (the locks).
 >
-> **Last updated:** 2026-07-18 (v0.1.2 — prebuilt universal binary distribution; kills the CLT/compile wall)
+> **Last updated:** 2026-07-18 (v0.1.3 — live cache-update fix for every post-setup state; no launch-time notifications; regression tests)
+
+## 2026-07-18 (latest) — Live-update fix + calm launch + tests (v0.1.3)
+
+- **Fixed the core-promise bug: the notch/LED now reflect usage live after setup, no relaunch.**
+  Root cause: the vnode watch was armed on the cache *file* via `open(…, O_EVTONLY)`, which
+  returns -1 when the file doesn't exist yet (the new-user flow: setup launches the app before
+  any Claude Code chat has written the cache) — so **no watch was ever armed**, and data only
+  surfaced on the 60s coarse tick. Fix (MenuBarAgent): watch the cache **directory** (catches
+  file *creation* and atomic temp+rename replacement) alongside the file watch, and create the
+  cache dir early. Data now reflects in ~0.1s.
+- **Verified against every post-setup state** (sandbox, via a `LUMOS_STATE_LOG` test seam):
+  dir-absent-at-launch, file-absent, empty→data, repeated atomic replaces (36→52→71), in-place
+  writes, delete→repopulate, corrupt half-write (no crash); live→stale→live and reset→refilled
+  covered by unit tests.
+- **No launch-time notifications.** The launch/wake `recompute` no longer delivers notifications,
+  and nothing fires until onboarding is dismissed — a fresh `lumos setup` shows only the info page.
+- **Regression tests:** `Tests/LumosCoreTests/LiveUpdateTests.swift` (transition logic) +
+  `scripts/test-live-update.sh` (drives the real binary against a sandbox and asserts live
+  reaction). `swift test` still can't run on this CLT-only machine (no `Testing` module — same as
+  all existing tests); they run in CI/Xcode. The shell integration test runs here and passes.
 
 ## 2026-07-18 (latest) — Distribution switched to a prebuilt universal binary (v0.1.2)
 
